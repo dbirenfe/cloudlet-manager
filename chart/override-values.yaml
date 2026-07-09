@@ -2,14 +2,14 @@ namespace: cloudlet-manager
 
 backend:
   image:
-    repository: image-registry.openshift-image-registry.svc:5000/cloudlet-manager/cloudlet-backend
-    tag: "latest"
+    repository: quay.io/dbirenfe/cloudlet-backend
+    tag: "1.0.1"
   replicas: 1
 
 frontend:
   image:
-    repository: image-registry.openshift-image-registry.svc:5000/cloudlet-manager/cloudlet-frontend
-    tag: "latest"
+    repository: quay.io/dbirenfe/cloudlet-frontend
+    tag: "1.0.1"
   replicas: 1
 
 oauthProxy:
@@ -33,6 +33,8 @@ route:
 
 corsOrigins: '["*"]'
 branchCacheTtl: 300
+
+imagePullSecret: "quay-pull-secret"
 
 vault:
   enabled: false
