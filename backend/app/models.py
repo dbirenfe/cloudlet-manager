@@ -8,6 +8,13 @@ class FieldInfo(BaseModel):
     parent_value: str | None = None
 
 
+class ValuesFieldInfo(BaseModel):
+    values: list[str]
+    defined_at: str
+    is_local: bool
+    parent_values: list[str] | None = None
+
+
 class AppSource(BaseModel):
     repoURL: str
     targetRevision: str
@@ -21,7 +28,7 @@ class AppConfig(BaseModel):
     inherited_from: str | None = None
     branch_exists: bool | None = None
     branch_info: FieldInfo
-    values_info: FieldInfo
+    values_info: ValuesFieldInfo
 
 
 class ClusterInfo(BaseModel):
@@ -51,7 +58,7 @@ class BranchUpdateRequest(BaseModel):
 class ValuesUpdateRequest(BaseModel):
     file_path: str
     app_name: str
-    values_file: str
+    values_files: list[str]
 
 
 class InheritFieldRequest(BaseModel):

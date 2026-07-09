@@ -22,6 +22,13 @@ export interface FieldInfo {
   parent_value: string | null;
 }
 
+export interface ValuesFieldInfo {
+  values: string[];
+  defined_at: string;
+  is_local: boolean;
+  parent_values: string[] | null;
+}
+
 export interface AppSource {
   repoURL: string;
   targetRevision: string;
@@ -35,7 +42,7 @@ export interface AppConfig {
   inherited_from: string | null;
   branch_exists: boolean | null;
   branch_info: FieldInfo;
-  values_info: FieldInfo;
+  values_info: ValuesFieldInfo;
 }
 
 export interface ScopeApps {
@@ -120,17 +127,17 @@ export async function fetchValuesFiles(
   );
 }
 
-export async function updateValuesFile(
+export async function updateValuesFiles(
   filePath: string,
   appName: string,
-  valuesFile: string
+  valuesFiles: string[]
 ): Promise<UpdateResponse> {
   return request<UpdateResponse>("/api/update-values", {
     method: "POST",
     body: JSON.stringify({
       file_path: filePath,
       app_name: appName,
-      values_file: valuesFile,
+      values_files: valuesFiles,
     }),
   });
 }

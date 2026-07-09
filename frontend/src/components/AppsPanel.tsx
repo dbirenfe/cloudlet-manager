@@ -7,6 +7,11 @@ interface AppsPanelProps {
   flavor: string | null;
   env: string | null;
   cluster: string | null;
+  onNavigate: (
+    flavor: string | null,
+    env: string | null,
+    cluster: string | null
+  ) => void;
 }
 
 const s: Record<string, CSSProperties> = {
@@ -26,6 +31,14 @@ const s: Record<string, CSSProperties> = {
   breadcrumbPart: {
     color: "var(--text-secondary)",
     fontWeight: 500,
+    cursor: "pointer",
+    borderRadius: 4,
+    padding: "2px 6px",
+    transition: "background 0.12s, color 0.12s",
+  },
+  breadcrumbPartActive: {
+    color: "var(--text-primary)",
+    fontWeight: 600,
   },
   breadcrumbSep: {
     color: "var(--text-muted)",
@@ -101,7 +114,7 @@ const s: Record<string, CSSProperties> = {
   },
 };
 
-export default function AppsPanel({ flavor, env, cluster }: AppsPanelProps) {
+export default function AppsPanel({ flavor, env, cluster, onNavigate }: AppsPanelProps) {
   const [data, setData] = useState<ScopeApps | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -148,17 +161,50 @@ export default function AppsPanel({ flavor, env, cluster }: AppsPanelProps) {
 
   return (
     <div style={s.panel}>
-      {breadcrumbParts.length > 0 && (
-        <div style={s.breadcrumb}>
-          <span style={s.breadcrumbPart}>root</span>
-          {breadcrumbParts.map((part, i) => (
-            <span key={i}>
-              <span style={s.breadcrumbSep}> / </span>
-              <span style={s.breadcrumbPart}>{part}</span>
+      <div style={s.breadcrumb}>
+        <span
+          style={{ ...s.breadcrumbPart, ...(!flavor ? s.breadcrumbPartActive : {}) }}
+          onClick={() => onNavigate(null, null, null)}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+        >
+          root
+        </span>
+        {flavor && (
+          <>
+            <span style={s.breadcrumbSep}>/</span>
+            <span
+              style={{ ...s.breadcrumbPart, ...(!env ? s.breadcrumbPartActive : {}) }}
+              onClick={() => onNavigate(flavor, null, null)}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >
+              {flavor}
             </span>
-          ))}
-        </div>
-      )}
+          </>
+        )}
+        {env && (
+          <>
+            <span style={s.breadcrumbSep}>/</span>
+            <span
+              style={{ ...s.breadcrumbPart, ...(!cluster ? s.breadcrumbPartActive : {}) }}
+              onClick={() => onNavigate(flavor, env, null)}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >
+              {env}
+            </span>
+          </>
+        )}
+        {cluster && (
+          <>
+            <span style={s.breadcrumbSep}>/</span>
+            <span style={{ ...s.breadcrumbPart, ...s.breadcrumbPartActive }}>
+              {cluster}
+            </span>
+          </>
+        )}
+      </div>
 
       <h1 style={s.heading}>{displayName}</h1>
       {data && <div style={s.scopeType}>{data.scope_type} scope</div>}

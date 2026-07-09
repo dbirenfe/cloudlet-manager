@@ -4,7 +4,7 @@ import {
   fetchBranches,
   updateBranch,
   fetchValuesFiles,
-  updateValuesFile,
+  updateValuesFiles,
   inheritField,
 } from "../api/client";
 
@@ -68,23 +68,15 @@ const s: Record<string, CSSProperties> = {
     marginBottom: 16,
     flexWrap: "wrap" as const,
   },
-  metaItem: {
-    fontSize: 12,
-    color: "var(--text-muted)",
-  },
-  metaLabel: {
-    color: "var(--text-secondary)",
-    fontWeight: 500,
-  },
+  metaItem: { fontSize: 12, color: "var(--text-muted)" },
+  metaLabel: { color: "var(--text-secondary)", fontWeight: 500 },
   repoUrl: {
     fontSize: 12,
     color: "var(--accent)",
     textDecoration: "none",
     wordBreak: "break-all" as const,
   },
-  fieldGroup: {
-    marginBottom: 14,
-  },
+  fieldGroup: { marginBottom: 14 },
   fieldLabel: {
     fontSize: 11,
     fontWeight: 600,
@@ -96,11 +88,7 @@ const s: Record<string, CSSProperties> = {
     alignItems: "center",
     gap: 6,
   },
-  fieldRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-  },
+  fieldRow: { display: "flex", alignItems: "center", gap: 10 },
   select: {
     flex: 1,
     maxWidth: 360,
@@ -132,20 +120,9 @@ const s: Record<string, CSSProperties> = {
     transition: "background 0.15s, opacity 0.15s",
     whiteSpace: "nowrap" as const,
   },
-  applyBtnDisabled: {
-    opacity: 0.4,
-    cursor: "not-allowed",
-  },
-  successMsg: {
-    fontSize: 12,
-    color: "var(--success)",
-    marginTop: 6,
-  },
-  errorMsg: {
-    fontSize: 12,
-    color: "var(--danger)",
-    marginTop: 6,
-  },
+  applyBtnDisabled: { opacity: 0.4, cursor: "not-allowed" },
+  successMsg: { fontSize: 12, color: "var(--success)", marginTop: 6 },
+  errorMsg: { fontSize: 12, color: "var(--danger)", marginTop: 6 },
   definedAt: {
     fontSize: 11,
     color: "var(--text-muted)",
@@ -157,6 +134,49 @@ const s: Record<string, CSSProperties> = {
     fontFamily: "monospace",
     fontSize: 11,
     color: "var(--text-secondary)",
+  },
+  valuesRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap" as const,
+  },
+  chip: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    fontSize: 12,
+    background: "var(--bg-input)",
+    border: "1px solid var(--border)",
+    borderRadius: 6,
+    padding: "4px 8px",
+    color: "var(--text-primary)",
+  },
+  chipRemove: {
+    background: "none",
+    border: "none",
+    color: "var(--text-muted)",
+    cursor: "pointer",
+    fontSize: 14,
+    lineHeight: 1,
+    padding: "0 2px",
+    display: "flex",
+    alignItems: "center",
+  },
+  inheritBtn: {
+    fontSize: 11,
+    color: "var(--accent)",
+    background: "var(--accent-muted)",
+    border: "1px solid transparent",
+    borderRadius: 6,
+    padding: "4px 10px",
+    cursor: "pointer",
+    whiteSpace: "nowrap" as const,
+    transition: "border-color 0.15s",
+  },
+  inheritBtnActive: {
+    borderColor: "var(--accent)",
+    fontWeight: 600,
   },
 };
 
@@ -192,11 +212,12 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
     branch_info.is_local ? branch_info.value : INHERIT_VALUE
   );
 
-  const [valuesFiles, setValuesFiles] = useState<string[]>([]);
+  const [availableValues, setAvailableValues] = useState<string[]>([]);
   const [loadingValues, setLoadingValues] = useState(false);
-  const [selectedValues, setSelectedValues] = useState(
-    values_info.is_local ? values_info.value : INHERIT_VALUE
+  const [editedValues, setEditedValues] = useState<string[]>(
+    values_info.is_local ? [...values_info.values] : []
   );
+  const [valuesInherit, setValuesInherit] = useState(!values_info.is_local);
 
   const [updating, setUpdating] = useState(false);
   const [result, setResult] = useState<UpdateResponse | null>(null);
@@ -204,7 +225,8 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
 
   useEffect(() => {
     setSelectedBranch(branch_info.is_local ? branch_info.value : INHERIT_VALUE);
-    setSelectedValues(values_info.is_local ? values_info.value : INHERIT_VALUE);
+    setEditedValues(values_info.is_local ? [...values_info.values] : []);
+    setValuesInherit(!values_info.is_local);
     setResult(null);
     setError(null);
   }, [app]);
@@ -223,30 +245,29 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
   };
 
   const loadValuesFiles = async () => {
-    if (valuesFiles.length > 0) return;
+    if (availableValues.length > 0) return;
     setLoadingValues(true);
     try {
       const data = await fetchValuesFiles(
         app.source.repoURL,
         app.source.targetRevision || "main"
       );
-      setValuesFiles(data.files);
+      setAvailableValues(data.files);
     } catch {
-      setValuesFiles([]);
+      setAvailableValues([]);
     } finally {
       setLoadingValues(false);
     }
   };
 
-  const currentBranchState = branch_info.is_local
-    ? branch_info.value
-    : INHERIT_VALUE;
-  const currentValuesState = values_info.is_local
-    ? values_info.value
-    : INHERIT_VALUE;
-
+  // Determine what changed
+  const currentBranchState = branch_info.is_local ? branch_info.value : INHERIT_VALUE;
   const isBranchChanged = selectedBranch !== currentBranchState;
-  const isValuesChanged = selectedValues !== currentValuesState;
+
+  const wasValuesInherited = !values_info.is_local;
+  const isValuesChanged = valuesInherit !== wasValuesInherited
+    || (!valuesInherit && JSON.stringify(editedValues) !== JSON.stringify(values_info.values));
+
   const hasAnyChange = isBranchChanged || isValuesChanged;
 
   const handleApply = async () => {
@@ -267,10 +288,10 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
       }
 
       if (isValuesChanged) {
-        if (selectedValues === INHERIT_VALUE) {
+        if (valuesInherit) {
           lastResult = await inheritField(scopeFile, app.name, "valuesFiles");
         } else {
-          lastResult = await updateValuesFile(scopeFile, app.name, selectedValues);
+          lastResult = await updateValuesFiles(scopeFile, app.name, editedValues);
         }
       }
 
@@ -283,15 +304,29 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
     }
   };
 
+  const removeValue = (idx: number) => {
+    setEditedValues((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const addValue = (file: string) => {
+    if (file && !editedValues.includes(file)) {
+      setEditedValues((prev) => [...prev, file]);
+    }
+  };
+
   const hasWarning = app.branch_exists === false;
 
   const inheritBranchLabel = branch_info.parent_value
     ? `Inherit from parent scope (${branch_info.parent_value})`
     : "Inherit from parent scope";
 
-  const inheritValuesLabel = values_info.parent_value
-    ? `Inherit from parent scope (${values_info.parent_value})`
+  const parentValuesLabel = values_info.parent_values
+    ? `Inherit from parent (${values_info.parent_values.join(", ")})`
     : "Inherit from parent scope";
+
+  const effectiveValues = valuesInherit
+    ? (values_info.parent_values ?? values_info.values)
+    : editedValues;
 
   return (
     <div style={{ ...s.card, ...(hasWarning ? s.cardWarning : {}) }}>
@@ -346,9 +381,7 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
                 : ""}
             </option>
             {branches
-              .filter(
-                (b) => b !== branch_info.value
-              )
+              .filter((b) => b !== branch_info.value)
               .map((b) => (
                 <option key={b} value={b}>
                   {b}
@@ -364,52 +397,88 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
         )}
       </div>
 
-      {/* Values file selector */}
+      {/* Values files - multi select with chips */}
       <div style={s.fieldGroup}>
         <div style={s.fieldLabel}>
           <FileIcon />
-          Values File
-          {!values_info.is_local && (
+          Values Files
+          {valuesInherit && (
             <span style={s.inheritedBadge}>inherited</span>
           )}
         </div>
-        <div style={s.fieldRow}>
-          <select
-            style={s.select}
-            value={selectedValues}
-            onChange={(e) => setSelectedValues(e.target.value)}
-            onFocus={loadValuesFiles}
-          >
-            {values_info.parent_value !== null && (
-              <option value={INHERIT_VALUE}>{inheritValuesLabel}</option>
-            )}
-            {values_info.value && (
-              <option value={values_info.value}>
-                {values_info.value}
-                {selectedValues !== INHERIT_VALUE &&
-                  values_info.value === currentValuesState
-                  ? " (current)"
-                  : ""}
-              </option>
-            )}
-            {valuesFiles
-              .filter((f) => f !== values_info.value)
-              .map((f) => (
-                <option key={f} value={f}>
-                  {f}
-                </option>
-              ))}
-            {loadingValues && <option disabled>Loading files...</option>}
-          </select>
-        </div>
-        {!values_info.is_local && values_info.defined_at && (
+
+        {/* Inherit toggle */}
+        {values_info.parent_values !== null && (
+          <div style={{ marginBottom: 8 }}>
+            <button
+              style={{
+                ...s.inheritBtn,
+                ...(valuesInherit ? s.inheritBtnActive : {}),
+              }}
+              onClick={() => {
+                if (!valuesInherit) {
+                  setValuesInherit(true);
+                  setEditedValues([]);
+                } else {
+                  setValuesInherit(false);
+                  setEditedValues([...values_info.values]);
+                }
+              }}
+            >
+              {valuesInherit ? `Inheriting: ${parentValuesLabel}` : parentValuesLabel}
+            </button>
+          </div>
+        )}
+
+        {!valuesInherit && (
+          <div style={s.valuesRow}>
+            {editedValues.map((vf, idx) => (
+              <span key={`${vf}-${idx}`} style={s.chip}>
+                {vf}
+                <button
+                  style={s.chipRemove}
+                  onClick={() => removeValue(idx)}
+                  title="Remove"
+                >
+                  &times;
+                </button>
+              </span>
+            ))}
+            <select
+              style={{ ...s.select, maxWidth: 220, flex: "none", fontSize: 12 }}
+              value=""
+              onChange={(e) => {
+                if (e.target.value) addValue(e.target.value);
+              }}
+              onFocus={loadValuesFiles}
+            >
+              <option value="">+ Add values file...</option>
+              {availableValues
+                .filter((f) => !editedValues.includes(f))
+                .map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+              {loadingValues && <option disabled>Loading files...</option>}
+            </select>
+          </div>
+        )}
+
+        {valuesInherit && values_info.defined_at && (
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
             From <span style={s.sourceFile}>{values_info.defined_at}</span>
+            {effectiveValues.length > 0 && (
+              <span>
+                {" "}
+                ({effectiveValues.join(", ")})
+              </span>
+            )}
           </div>
         )}
       </div>
 
-      {/* Single apply button for all changes */}
+      {/* Apply button */}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <button
           style={{
@@ -420,8 +489,7 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
           onClick={handleApply}
           onMouseEnter={(e) => {
             if (hasAnyChange && !updating)
-              (e.currentTarget as HTMLElement).style.background =
-                "var(--accent-hover)";
+              (e.currentTarget as HTMLElement).style.background = "var(--accent-hover)";
           }}
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLElement).style.background = "var(--accent)";
@@ -437,9 +505,9 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
                   ? "branch: inherit"
                   : `branch: ${selectedBranch}`),
               isValuesChanged &&
-                (selectedValues === INHERIT_VALUE
+                (valuesInherit
                   ? "values: inherit"
-                  : `values: ${selectedValues}`),
+                  : `values: [${editedValues.join(", ")}]`),
             ]
               .filter(Boolean)
               .join(", ")}

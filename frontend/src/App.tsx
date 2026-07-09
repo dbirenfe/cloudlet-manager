@@ -58,6 +58,7 @@ export default function App() {
             flavor={selectedFlavor}
             env={selectedEnv}
             cluster={selectedCluster}
+            onNavigate={handleSelect}
           />
         )}
       </div>

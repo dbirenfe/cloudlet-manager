@@ -114,7 +114,7 @@ async def update_values(
     user: dict = Depends(get_current_user),
 ):
     try:
-        result = await update_app_values(req.file_path, req.app_name, req.values_file)
+        result = await update_app_values(req.file_path, req.app_name, req.values_files)
         commit_url = result.get("commit", {}).get("html_url", "")
         username = user.get("preferred_username", "unknown")
         return UpdateResponse(

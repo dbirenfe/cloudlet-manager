@@ -17,6 +17,7 @@ from app.models import (
     AppSource,
     ClusterInfo,
     FieldInfo,
+    ValuesFieldInfo,
     RepoStructure,
     ScopeApps,
 )
@@ -89,14 +90,16 @@ async def _load_apps_file(path: str) -> dict:
         return {}
 
 
-def _extract_values_file(app_data: dict) -> str | None:
-    """Extract the first valuesFile from an app config, or None."""
+def _extract_values_files(app_data: dict) -> list[str] | None:
+    """Extract valuesFiles list from an app config, or None if not set."""
     helm = app_data.get("source", {}).get("helm", {})
     if not isinstance(helm, dict):
         return None
-    vf = helm.get("valuesFiles", [])
-    if isinstance(vf, list) and vf:
-        return vf[0]
+    vf = helm.get("valuesFiles")
+    if vf is None:
+        return None
+    if isinstance(vf, list):
+        return [str(f) for f in vf]
     return None
 
 
@@ -132,10 +135,10 @@ async def get_apps_for_scope(
 
     current_scope_path = layers[-1][1]
 
-    # Per-app, per-field tracking: list of (value, file_path) entries in layer order
-    # Each entry means "this file sets this field to this value"
-    app_fields: dict[str, dict[str, list[tuple[str, str]]]] = {}
-    # Track which apps appear in which files
+    # Per-app tracking
+    app_branch_entries: dict[str, list[tuple[str, str]]] = {}  # app -> [(value, path)]
+    app_values_entries: dict[str, list[tuple[list[str], str]]] = {}  # app -> [([files], path)]
+    app_repo_entries: dict[str, list[tuple[str, str]]] = {}  # app -> [(url, path)]
     app_files: dict[str, list[str]] = {}
 
     for _, path in layers:
@@ -144,27 +147,25 @@ async def get_apps_for_scope(
             if not isinstance(app_data, dict):
                 continue
 
-            if app_name not in app_fields:
-                app_fields[app_name] = {
-                    "repoURL": [],
-                    "targetRevision": [],
-                    "valuesFiles": [],
-                }
+            if app_name not in app_files:
+                app_branch_entries[app_name] = []
+                app_values_entries[app_name] = []
+                app_repo_entries[app_name] = []
                 app_files[app_name] = []
 
             app_files[app_name].append(path)
 
             repo = _extract_repo_url(app_data)
             if repo is not None:
-                app_fields[app_name]["repoURL"].append((repo, path))
+                app_repo_entries[app_name].append((repo, path))
 
             tr = _extract_target_revision(app_data)
             if tr is not None:
-                app_fields[app_name]["targetRevision"].append((tr, path))
+                app_branch_entries[app_name].append((tr, path))
 
-            vf = _extract_values_file(app_data)
+            vf = _extract_values_files(app_data)
             if vf is not None:
-                app_fields[app_name]["valuesFiles"].append((vf, path))
+                app_values_entries[app_name].append((vf, path))
 
     # Build AppConfig list
     scope_parts = []
@@ -187,17 +188,17 @@ async def get_apps_for_scope(
     apps: list[AppConfig] = []
     branch_checks = []
 
-    for app_name, fields in app_fields.items():
-        repo_entries = fields["repoURL"]
-        tr_entries = fields["targetRevision"]
-        vf_entries = fields["valuesFiles"]
+    for app_name in app_files:
+        repo_entries = app_repo_entries[app_name]
+        tr_entries = app_branch_entries[app_name]
+        vf_entries = app_values_entries[app_name]
 
         if not repo_entries:
             continue
 
         repo_url = repo_entries[-1][0]
         effective_branch = tr_entries[-1][0] if tr_entries else ""
-        effective_values = vf_entries[-1][0] if vf_entries else ""
+        effective_values = vf_entries[-1][0] if vf_entries else []
 
         # Build branch FieldInfo
         if tr_entries:
@@ -222,27 +223,27 @@ async def get_apps_for_scope(
                 parent_value=None,
             )
 
-        # Build values FieldInfo
+        # Build values ValuesFieldInfo
         if vf_entries:
-            last_val, last_path = vf_entries[-1]
+            last_vals, last_path = vf_entries[-1]
             is_local = last_path == current_scope_path
-            parent_val = None
+            parent_vals = None
             if is_local and len(vf_entries) >= 2:
-                parent_val = vf_entries[-2][0]
+                parent_vals = vf_entries[-2][0]
             elif not is_local:
-                parent_val = last_val
-            values_info = FieldInfo(
-                value=last_val,
+                parent_vals = last_vals
+            values_info = ValuesFieldInfo(
+                values=last_vals,
                 defined_at=last_path,
                 is_local=is_local,
-                parent_value=parent_val,
+                parent_values=parent_vals,
             )
         else:
-            values_info = FieldInfo(
-                value="",
+            values_info = ValuesFieldInfo(
+                values=[],
                 defined_at="",
                 is_local=False,
-                parent_value=None,
+                parent_values=None,
             )
 
         files_list = app_files[app_name]
@@ -251,7 +252,7 @@ async def get_apps_for_scope(
 
         helm_data = None
         if effective_values:
-            helm_data = {"valuesFiles": [effective_values]}
+            helm_data = {"valuesFiles": effective_values}
 
         app = AppConfig(
             name=app_name,
@@ -310,7 +311,7 @@ async def update_app_branch(
 async def update_app_values(
     file_path: str,
     app_name: str,
-    values_file: str,
+    values_files: list[str],
 ) -> dict:
     """
     Update the helm.valuesFiles for a specific app in a specific file.
@@ -326,13 +327,13 @@ async def update_app_values(
         if "helm" not in data[app_name]["source"]:
             data[app_name]["source"]["helm"] = {}
         old_values = data[app_name]["source"]["helm"].get("valuesFiles", [])
-        data[app_name]["source"]["helm"]["valuesFiles"] = [values_file]
+        data[app_name]["source"]["helm"]["valuesFiles"] = values_files
     else:
         old_values = "inherited"
-        data[app_name] = {"source": {"helm": {"valuesFiles": [values_file]}}}
+        data[app_name] = {"source": {"helm": {"valuesFiles": values_files}}}
 
     new_content = yaml.dump(data, default_flow_style=False, sort_keys=False)
-    message = f"cloudlet-manager: update {app_name} valuesFiles from {old_values} to ['{values_file}'] in {file_path}"
+    message = f"cloudlet-manager: update {app_name} valuesFiles from {old_values} to {values_files} in {file_path}"
     return await update_file(
         s.github_spec_repo, file_path, s.github_spec_branch, new_content, message
     )
