@@ -103,6 +103,10 @@ branchCacheTtl: 300
 # and a SecretStore/ClusterSecretStore configured.
 ########################################################
 vault:
+  # -- Enable ExternalSecrets integration with Vault.
+  # When false, you must create the K8s secrets manually (see README).
+  # Secret names expected: cloudlet-git-token, cloudlet-sso-secret, cloudlet-oauth-proxy-secret
+  enabled: true
   # -- Name of the SecretStore or ClusterSecretStore
   secretStoreName: "vault-backend"
   # -- Kind: "SecretStore" or "ClusterSecretStore"

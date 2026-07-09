@@ -1,0 +1,38 @@
+namespace: cloudlet-manager
+
+backend:
+  image:
+    repository: image-registry.openshift-image-registry.svc:5000/cloudlet-manager/cloudlet-backend
+    tag: "latest"
+  replicas: 1
+
+frontend:
+  image:
+    repository: image-registry.openshift-image-registry.svc:5000/cloudlet-manager/cloudlet-frontend
+    tag: "latest"
+  replicas: 1
+
+oauthProxy:
+  image:
+    repository: quay.io/oauth2-proxy/oauth2-proxy
+    tag: "v7.7.1"
+
+git:
+  specRepo: "dbirenfe/cloudlets-spec"
+  specBranch: "main"
+  apiUrl: "https://api.github.com"
+
+sso:
+  enabled: false
+
+route:
+  host: "cloudlet-manager-cloudlet-manager.apps.cluster-nf2q4.dynamic2.redhatworkshops.io"
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+
+corsOrigins: '["*"]'
+branchCacheTtl: 300
+
+vault:
+  enabled: false
