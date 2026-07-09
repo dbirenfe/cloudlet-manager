@@ -7,6 +7,7 @@ from app.github_client import (
     get_file_content,
     update_file,
     list_branches,
+    list_values_files,
     branch_exists,
     parse_yaml,
 )
@@ -212,6 +213,41 @@ async def update_app_branch(
     new_content = yaml.dump(data, default_flow_style=False, sort_keys=False)
 
     message = f"cloudlet-manager: update {app_name} targetRevision from '{old_branch}' to '{new_branch}' in {file_path}"
+    result = await update_file(
+        s.github_spec_repo, file_path, s.github_spec_branch, new_content, message
+    )
+    return result
+
+
+async def update_app_values(
+    file_path: str,
+    app_name: str,
+    values_files: list[str],
+) -> dict:
+    """
+    Update the helm.valuesFiles for a specific app in a specific file.
+    Returns commit info on success.
+    """
+    s = get_settings()
+    content = await get_file_content(s.github_spec_repo, file_path, s.github_spec_branch)
+    data = parse_yaml(content)
+
+    if app_name not in data:
+        raise ValueError(f"App '{app_name}' not found in {file_path}")
+
+    if "source" not in data[app_name]:
+        raise ValueError(f"App '{app_name}' has no source in {file_path}")
+
+    if "helm" not in data[app_name]["source"]:
+        data[app_name]["source"]["helm"] = {}
+
+    old_values = data[app_name]["source"]["helm"].get("valuesFiles", [])
+    data[app_name]["source"]["helm"]["valuesFiles"] = values_files
+
+    import yaml
+    new_content = yaml.dump(data, default_flow_style=False, sort_keys=False)
+
+    message = f"cloudlet-manager: update {app_name} valuesFiles from {old_values} to {values_files} in {file_path}"
     result = await update_file(
         s.github_spec_repo, file_path, s.github_spec_branch, new_content, message
     )

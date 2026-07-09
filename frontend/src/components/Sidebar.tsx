@@ -13,28 +13,92 @@ interface SidebarProps {
   ) => void;
 }
 
-const s: Record<string, CSSProperties> = {
+function ChevronIcon({ expanded }: { expanded: boolean }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      style={{
+        transition: "transform 0.2s ease",
+        transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
+        flexShrink: 0,
+      }}
+    >
+      <path
+        d="M6 4L10 8L6 12"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function FolderIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+      <path
+        d="M2 4C2 3.44772 2.44772 3 3 3H6.17157C6.43679 3 6.69114 3.10536 6.87868 3.29289L7.70711 4.12132C7.89464 4.30886 8.149 4.41421 8.41421 4.41421H13C13.5523 4.41421 14 4.86193 14 5.41421V12C14 12.5523 13.5523 13 13 13H3C2.44772 13 2 12.5523 2 12V4Z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ServerIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+      <rect x="2" y="2" width="12" height="5" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="2" y="9" width="12" height="5" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+      <circle cx="5" cy="4.5" r="0.75" fill="currentColor" />
+      <circle cx="5" cy="11.5" r="0.75" fill="currentColor" />
+    </svg>
+  );
+}
+
+function GlobeIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M2 8H14" stroke="currentColor" strokeWidth="1.2" />
+      <path
+        d="M8 2C9.65685 3.51472 10.6569 5.66228 10.6569 8C10.6569 10.3377 9.65685 12.4853 8 14C6.34315 12.4853 5.34315 10.3377 5.34315 8C5.34315 5.66228 6.34315 3.51472 8 2Z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
+    </svg>
+  );
+}
+
+const st: Record<string, CSSProperties> = {
   sidebar: {
     width: 280,
     minWidth: 280,
     background: "var(--bg-secondary)",
     borderRight: "1px solid var(--border)",
     overflowY: "auto",
-    padding: "16px 0",
+    padding: "12px 0",
     display: "flex",
     flexDirection: "column",
   },
-  section: { marginBottom: 4 },
+  section: { marginBottom: 2 },
   rootItem: {
     display: "flex",
     alignItems: "center",
-    padding: "10px 20px",
+    gap: 8,
+    padding: "10px 16px",
     cursor: "pointer",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: 500,
     color: "var(--text-secondary)",
     transition: "all 0.15s",
     borderLeft: "3px solid transparent",
+    userSelect: "none" as const,
   },
   rootItemActive: {
     background: "var(--accent-muted)",
@@ -42,72 +106,73 @@ const s: Record<string, CSSProperties> = {
     borderLeftColor: "var(--accent)",
   },
   groupLabel: {
-    padding: "10px 20px 6px",
-    fontSize: 11,
-    fontWeight: 600,
+    padding: "14px 16px 6px",
+    fontSize: 10,
+    fontWeight: 700,
     textTransform: "uppercase" as const,
-    letterSpacing: "0.08em",
+    letterSpacing: "0.1em",
     color: "var(--text-muted)",
   },
-  flavorItem: {
+  treeItem: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
-    padding: "8px 20px 8px 24px",
-    cursor: "pointer",
-    fontSize: 14,
-    color: "var(--text-secondary)",
-    transition: "all 0.15s",
-    borderLeft: "3px solid transparent",
-  },
-  flavorActive: {
-    background: "var(--accent-muted)",
-    color: "var(--accent-hover)",
-    borderLeftColor: "var(--accent)",
-    fontWeight: 500,
-  },
-  envItem: {
-    padding: "6px 20px 6px 40px",
+    gap: 6,
+    padding: "7px 16px",
     cursor: "pointer",
     fontSize: 13,
     color: "var(--text-secondary)",
-    transition: "all 0.15s",
+    transition: "all 0.12s",
     borderLeft: "3px solid transparent",
+    userSelect: "none" as const,
   },
-  envActive: {
+  treeItemActive: {
     background: "var(--accent-muted)",
     color: "var(--accent-hover)",
     borderLeftColor: "var(--accent)",
     fontWeight: 500,
-  },
-  clusterItem: {
-    padding: "5px 20px 5px 56px",
-    cursor: "pointer",
-    fontSize: 12,
-    color: "var(--text-muted)",
-    transition: "all 0.15s",
-    borderLeft: "3px solid transparent",
-  },
-  clusterActive: {
-    background: "var(--accent-muted)",
-    color: "var(--accent-hover)",
-    borderLeftColor: "var(--accent)",
-    fontWeight: 500,
-  },
-  chevron: {
-    fontSize: 10,
-    transition: "transform 0.2s",
-    color: "var(--text-muted)",
   },
   badge: {
     fontSize: 10,
+    fontWeight: 600,
     background: "var(--border)",
     color: "var(--text-muted)",
     borderRadius: 10,
-    padding: "1px 6px",
-    marginLeft: 8,
+    padding: "1px 7px",
+    marginLeft: "auto",
   },
 };
+
+function TreeRow({
+  active,
+  depth,
+  children,
+  onClick,
+}: {
+  active: boolean;
+  depth: number;
+  children: React.ReactNode;
+  onClick: () => void;
+}) {
+  const paddingLeft = 16 + depth * 16;
+  return (
+    <div
+      style={{
+        ...st.treeItem,
+        paddingLeft,
+        ...(active ? st.treeItemActive : {}),
+      }}
+      onClick={onClick}
+      onMouseEnter={(e) => {
+        if (!active) (e.currentTarget as HTMLElement).style.background = "var(--bg-hover)";
+      }}
+      onMouseLeave={(e) => {
+        if (!active) (e.currentTarget as HTMLElement).style.background = "transparent";
+      }}
+    >
+      {children}
+    </div>
+  );
+}
 
 export default function Sidebar({
   structure,
@@ -116,15 +181,13 @@ export default function Sidebar({
   selectedCluster,
   onSelect,
 }: SidebarProps) {
-  const [expandedFlavors, setExpandedFlavors] = useState<Set<string>>(
-    new Set()
-  );
+  const [expandedFlavors, setExpandedFlavors] = useState<Set<string>>(new Set());
   const [expandedEnvs, setExpandedEnvs] = useState<Set<string>>(new Set());
 
   if (!structure) {
     return (
-      <div style={s.sidebar}>
-        <div style={{ ...s.groupLabel, color: "var(--text-muted)" }}>
+      <div style={st.sidebar}>
+        <div style={{ ...st.groupLabel, color: "var(--text-muted)", padding: 20 }}>
           Loading...
         </div>
       </div>
@@ -149,33 +212,30 @@ export default function Sidebar({
     });
   };
 
-  const isRootSelected =
-    !selectedFlavor && !selectedEnv && !selectedCluster;
+  const isRootSelected = !selectedFlavor && !selectedEnv && !selectedCluster;
 
   return (
-    <div style={s.sidebar}>
-      <div style={s.section}>
-        <div
-          style={{
-            ...s.rootItem,
-            ...(isRootSelected ? s.rootItemActive : {}),
-          }}
-          onClick={() => onSelect(null, null, null)}
-          onMouseEnter={(e) => {
-            if (!isRootSelected)
-              (e.currentTarget as HTMLElement).style.background =
-                "var(--bg-hover)";
-          }}
-          onMouseLeave={(e) => {
-            if (!isRootSelected)
-              (e.currentTarget as HTMLElement).style.background = "transparent";
-          }}
-        >
-          All Clusters (Root)
-        </div>
+    <div style={st.sidebar}>
+      <div
+        style={{
+          ...st.rootItem,
+          ...(isRootSelected ? st.rootItemActive : {}),
+        }}
+        onClick={() => onSelect(null, null, null)}
+        onMouseEnter={(e) => {
+          if (!isRootSelected)
+            (e.currentTarget as HTMLElement).style.background = "var(--bg-hover)";
+        }}
+        onMouseLeave={(e) => {
+          if (!isRootSelected)
+            (e.currentTarget as HTMLElement).style.background = "transparent";
+        }}
+      >
+        <GlobeIcon />
+        All Clusters
       </div>
 
-      <div style={s.groupLabel}>Flavors</div>
+      <div style={st.groupLabel}>Flavors</div>
 
       {structure.flavors.map((flavor) => {
         const isExpanded = expandedFlavors.has(flavor);
@@ -184,114 +244,61 @@ export default function Sidebar({
         const envs = structure.environments[flavor] || [];
 
         return (
-          <div key={flavor} style={s.section}>
-            <div
-              style={{
-                ...s.flavorItem,
-                ...(isFlavorSelected ? s.flavorActive : {}),
-              }}
-              onMouseEnter={(e) => {
-                if (!isFlavorSelected)
-                  (e.currentTarget as HTMLElement).style.background =
-                    "var(--bg-hover)";
-              }}
-              onMouseLeave={(e) => {
-                if (!isFlavorSelected)
-                  (e.currentTarget as HTMLElement).style.background =
-                    "transparent";
+          <div key={flavor} style={st.section}>
+            <TreeRow
+              active={isFlavorSelected}
+              depth={0}
+              onClick={() => {
+                onSelect(flavor, null, null);
+                if (!isExpanded) toggleFlavor(flavor);
               }}
             >
               <span
-                onClick={() => {
-                  onSelect(flavor, null, null);
-                  if (!isExpanded) toggleFlavor(flavor);
+                style={{ color: "inherit", display: "flex", cursor: "pointer" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFlavor(flavor);
                 }}
-                style={{ flex: 1, cursor: "pointer" }}
               >
-                {flavor}
+                <ChevronIcon expanded={isExpanded} />
               </span>
-              {envs.length > 0 && (
-                <span
-                  style={{
-                    ...s.chevron,
-                    transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
-                    cursor: "pointer",
-                    padding: "4px",
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleFlavor(flavor);
-                  }}
-                >
-                  ▶
-                </span>
-              )}
-            </div>
+              <FolderIcon />
+              <span style={{ flex: 1 }}>{flavor}</span>
+            </TreeRow>
 
             {isExpanded &&
               envs.map((env) => {
                 const envKey = `${flavor}/${env}`;
                 const isEnvExpanded = expandedEnvs.has(envKey);
                 const isEnvSelected =
-                  selectedFlavor === flavor &&
-                  selectedEnv === env &&
-                  !selectedCluster;
-                const clusters: ClusterInfo[] =
-                  structure.clusters[envKey] || [];
+                  selectedFlavor === flavor && selectedEnv === env && !selectedCluster;
+                const clusters: ClusterInfo[] = structure.clusters[envKey] || [];
 
                 return (
                   <div key={envKey}>
-                    <div
-                      style={{
-                        ...s.envItem,
-                        ...(isEnvSelected ? s.envActive : {}),
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isEnvSelected)
-                          (e.currentTarget as HTMLElement).style.background =
-                            "var(--bg-hover)";
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isEnvSelected)
-                          (e.currentTarget as HTMLElement).style.background =
-                            "transparent";
+                    <TreeRow
+                      active={isEnvSelected}
+                      depth={1}
+                      onClick={() => {
+                        onSelect(flavor, env, null);
+                        if (!isEnvExpanded) toggleEnv(envKey);
                       }}
                     >
                       <span
-                        onClick={() => {
-                          onSelect(flavor, env, null);
-                          if (!isEnvExpanded) toggleEnv(envKey);
-                        }}
-                        style={{
-                          flex: 1,
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
+                        style={{ color: "inherit", display: "flex", cursor: "pointer" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleEnv(envKey);
                         }}
                       >
-                        {env}
-                        <span style={s.badge}>{clusters.length}</span>
+                        <ChevronIcon expanded={isEnvExpanded} />
                       </span>
+                      <FolderIcon />
+                      <span style={{ flex: 1 }}>{env}</span>
                       {clusters.length > 0 && (
-                        <span
-                          style={{
-                            ...s.chevron,
-                            transform: isEnvExpanded
-                              ? "rotate(90deg)"
-                              : "rotate(0deg)",
-                            cursor: "pointer",
-                            padding: "4px",
-                            display: "inline-block",
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleEnv(envKey);
-                          }}
-                        >
-                          ▶
-                        </span>
+                        <span style={st.badge}>{clusters.length}</span>
                       )}
-                    </div>
+                    </TreeRow>
 
                     {isEnvExpanded &&
                       clusters.map((cl) => {
@@ -300,28 +307,16 @@ export default function Sidebar({
                           selectedEnv === env &&
                           selectedCluster === cl.name;
                         return (
-                          <div
+                          <TreeRow
                             key={cl.name}
-                            style={{
-                              ...s.clusterItem,
-                              ...(isClusterSelected ? s.clusterActive : {}),
-                            }}
+                            active={isClusterSelected}
+                            depth={2}
                             onClick={() => onSelect(flavor, env, cl.name)}
-                            onMouseEnter={(e) => {
-                              if (!isClusterSelected)
-                                (
-                                  e.currentTarget as HTMLElement
-                                ).style.background = "var(--bg-hover)";
-                            }}
-                            onMouseLeave={(e) => {
-                              if (!isClusterSelected)
-                                (
-                                  e.currentTarget as HTMLElement
-                                ).style.background = "transparent";
-                            }}
                           >
-                            {cl.name}
-                          </div>
+                            <span style={{ width: 16 }} />
+                            <ServerIcon />
+                            <span>{cl.name}</span>
+                          </TreeRow>
                         );
                       })}
                   </div>

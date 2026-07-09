@@ -39,6 +39,24 @@ class BranchUpdateRequest(BaseModel):
     new_branch: str
 
 
+class ValuesUpdateRequest(BaseModel):
+    file_path: str
+    app_name: str
+    values_files: list[str]
+
+
+class ValuesFileList(BaseModel):
+    repo_url: str
+    branch: str
+    files: list[str]
+
+
+class UpdateResponse(BaseModel):
+    success: bool
+    message: str
+    commit_url: str | None = None
+
+
 class BranchUpdateResponse(BaseModel):
     success: bool
     message: str

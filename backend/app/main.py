@@ -7,11 +7,14 @@ from app.models import (
     BranchList,
     BranchUpdateRequest,
     BranchUpdateResponse,
+    ValuesUpdateRequest,
+    ValuesFileList,
+    UpdateResponse,
     RepoStructure,
     ScopeApps,
 )
-from app.spec_service import get_structure, get_apps_for_scope, update_app_branch
-from app.github_client import list_branches
+from app.spec_service import get_structure, get_apps_for_scope, update_app_branch, update_app_values
+from app.github_client import list_branches, list_values_files
 
 
 @asynccontextmanager
@@ -87,6 +90,38 @@ async def update_branch(
         return BranchUpdateResponse(
             success=True,
             message=f"Branch updated by {username}",
+            commit_url=commit_url,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update: {e}")
+
+
+@app.get("/api/values-files", response_model=ValuesFileList)
+async def values_files(
+    repo_url: str = Query(..., description="Full GitHub repo URL"),
+    branch: str = Query("main", description="Branch to list files from"),
+    user: dict = Depends(get_current_user),
+):
+    """List YAML files in a repo that can be used as Helm values files."""
+    files = await list_values_files(repo_url, branch)
+    return ValuesFileList(repo_url=repo_url, branch=branch, files=files)
+
+
+@app.post("/api/update-values", response_model=UpdateResponse)
+async def update_values(
+    req: ValuesUpdateRequest,
+    user: dict = Depends(get_current_user),
+):
+    """Update the helm.valuesFiles for an app in a specific YAML file."""
+    try:
+        result = await update_app_values(req.file_path, req.app_name, req.values_files)
+        commit_url = result.get("commit", {}).get("html_url", "")
+        username = user.get("preferred_username", "unknown")
+        return UpdateResponse(
+            success=True,
+            message=f"Values files updated by {username}",
             commit_url=commit_url,
         )
     except ValueError as e:

@@ -1,6 +1,11 @@
 import { type CSSProperties, useEffect, useState } from "react";
 import type { AppConfig, BranchUpdateResponse } from "../api/client";
-import { fetchBranches, updateBranch } from "../api/client";
+import {
+  fetchBranches,
+  updateBranch,
+  fetchValuesFiles,
+  updateValuesFiles,
+} from "../api/client";
 
 interface AppCardProps {
   app: AppConfig;
@@ -47,7 +52,7 @@ const s: Record<string, CSSProperties> = {
   meta: {
     display: "flex",
     gap: 16,
-    marginBottom: 14,
+    marginBottom: 16,
     flexWrap: "wrap" as const,
   },
   metaItem: {
@@ -64,11 +69,24 @@ const s: Record<string, CSSProperties> = {
     textDecoration: "none",
     wordBreak: "break-all" as const,
   },
-  branchRow: {
+  fieldGroup: {
+    marginBottom: 14,
+  },
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: 600,
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.06em",
+    color: "var(--text-muted)",
+    marginBottom: 6,
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+  },
+  fieldRow: {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    marginTop: 4,
   },
   select: {
     flex: 1,
@@ -90,54 +108,98 @@ const s: Record<string, CSSProperties> = {
     paddingRight: 32,
   },
   applyBtn: {
-    padding: "8px 20px",
+    padding: "8px 16px",
     background: "var(--accent)",
     color: "#fff",
     border: "none",
     borderRadius: "var(--radius)",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 500,
     cursor: "pointer",
     transition: "background 0.15s, opacity 0.15s",
     whiteSpace: "nowrap" as const,
   },
   applyBtnDisabled: {
-    opacity: 0.5,
+    opacity: 0.4,
     cursor: "not-allowed",
   },
   successMsg: {
     fontSize: 12,
     color: "var(--success)",
-    marginTop: 8,
+    marginTop: 6,
   },
   errorMsg: {
     fontSize: 12,
     color: "var(--danger)",
-    marginTop: 8,
+    marginTop: 6,
   },
   definedAt: {
     fontSize: 11,
     color: "var(--text-muted)",
-    marginTop: 8,
+    marginTop: 12,
+    paddingTop: 10,
+    borderTop: "1px solid var(--border)",
     fontStyle: "italic",
+  },
+  valuesChip: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    fontSize: 12,
+    background: "var(--bg-input)",
+    border: "1px solid var(--border)",
+    borderRadius: 6,
+    padding: "4px 8px",
+    color: "var(--text-primary)",
+  },
+  removeBtn: {
+    background: "none",
+    border: "none",
+    color: "var(--text-muted)",
+    cursor: "pointer",
+    fontSize: 14,
+    lineHeight: 1,
+    padding: "0 2px",
+    display: "flex",
+    alignItems: "center",
+  },
+  valuesRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap" as const,
   },
 };
 
 export default function AppCard({ app, onUpdated }: AppCardProps) {
   const [branches, setBranches] = useState<string[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(false);
-  const [selectedBranch, setSelectedBranch] = useState(
-    app.source.targetRevision
-  );
-  const [updating, setUpdating] = useState(false);
-  const [result, setResult] = useState<BranchUpdateResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [selectedBranch, setSelectedBranch] = useState(app.source.targetRevision);
+  const [updatingBranch, setUpdatingBranch] = useState(false);
+  const [branchResult, setBranchResult] = useState<BranchUpdateResponse | null>(null);
+  const [branchError, setBranchError] = useState<string | null>(null);
+
+  const currentValues: string[] = Array.isArray(app.source.helm?.valuesFiles)
+    ? (app.source.helm!.valuesFiles as string[])
+    : [];
+  const [editedValues, setEditedValues] = useState<string[]>(currentValues);
+  const [availableValues, setAvailableValues] = useState<string[]>([]);
+  const [loadingValues, setLoadingValues] = useState(false);
+  const [updatingValues, setUpdatingValues] = useState(false);
+  const [valuesResult, setValuesResult] = useState<BranchUpdateResponse | null>(null);
+  const [valuesError, setValuesError] = useState<string | null>(null);
 
   useEffect(() => {
     setSelectedBranch(app.source.targetRevision);
-    setResult(null);
-    setError(null);
-  }, [app.source.targetRevision]);
+    setBranchResult(null);
+    setBranchError(null);
+    const newVals = Array.isArray(app.source.helm?.valuesFiles)
+      ? (app.source.helm!.valuesFiles as string[])
+      : [];
+    setEditedValues(newVals);
+    setValuesResult(null);
+    setValuesError(null);
+  }, [app]);
 
   const loadBranches = async () => {
     if (branches.length > 0) return;
@@ -152,28 +214,64 @@ export default function AppCard({ app, onUpdated }: AppCardProps) {
     }
   };
 
-  const handleApply = async () => {
-    if (selectedBranch === app.source.targetRevision) return;
-    setUpdating(true);
-    setError(null);
-    setResult(null);
+  const loadValuesFiles = async () => {
+    if (availableValues.length > 0) return;
+    setLoadingValues(true);
     try {
-      const res = await updateBranch(
-        app.defined_at,
-        app.name,
-        selectedBranch
-      );
-      setResult(res);
+      const data = await fetchValuesFiles(app.source.repoURL, app.source.targetRevision);
+      setAvailableValues(data.files);
+    } catch {
+      setAvailableValues([]);
+    } finally {
+      setLoadingValues(false);
+    }
+  };
+
+  const handleApplyBranch = async () => {
+    if (selectedBranch === app.source.targetRevision) return;
+    setUpdatingBranch(true);
+    setBranchError(null);
+    setBranchResult(null);
+    try {
+      const res = await updateBranch(app.defined_at, app.name, selectedBranch);
+      setBranchResult(res);
       onUpdated();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Update failed");
+      setBranchError(e instanceof Error ? e.message : "Update failed");
     } finally {
-      setUpdating(false);
+      setUpdatingBranch(false);
+    }
+  };
+
+  const handleApplyValues = async () => {
+    setUpdatingValues(true);
+    setValuesError(null);
+    setValuesResult(null);
+    try {
+      const res = await updateValuesFiles(app.defined_at, app.name, editedValues);
+      setValuesResult(res);
+      onUpdated();
+    } catch (e) {
+      setValuesError(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setUpdatingValues(false);
+    }
+  };
+
+  const removeValue = (idx: number) => {
+    setEditedValues((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const addValue = (file: string) => {
+    if (file && !editedValues.includes(file)) {
+      setEditedValues((prev) => [...prev, file]);
     }
   };
 
   const hasWarning = app.branch_exists === false;
-  const isChanged = selectedBranch !== app.source.targetRevision;
+  const isBranchChanged = selectedBranch !== app.source.targetRevision;
+  const isValuesChanged =
+    JSON.stringify(editedValues) !== JSON.stringify(currentValues);
 
   return (
     <div style={{ ...s.card, ...(hasWarning ? s.cardWarning : {}) }}>
@@ -181,9 +279,7 @@ export default function AppCard({ app, onUpdated }: AppCardProps) {
         <div style={s.appName}>
           {app.name}
           {hasWarning && (
-            <span style={s.warningBadge}>
-              ⚠ Branch not found
-            </span>
+            <span style={s.warningBadge}>Branch not found</span>
           )}
         </div>
       </div>
@@ -200,73 +296,149 @@ export default function AppCard({ app, onUpdated }: AppCardProps) {
             {app.source.repoURL.replace("https://github.com/", "")}
           </a>
         </span>
-        {Array.isArray(app.source.helm?.valuesFiles) && (
-          <span style={s.metaItem}>
-            <span style={s.metaLabel}>Values: </span>
-            {(app.source.helm!.valuesFiles as string[]).join(", ")}
-          </span>
-        )}
       </div>
 
-      <div style={s.branchRow}>
-        <select
-          style={s.select}
-          value={selectedBranch}
-          onChange={(e) => setSelectedBranch(e.target.value)}
-          onFocus={loadBranches}
-        >
-          <option value={app.source.targetRevision}>
-            {app.source.targetRevision}
-            {hasWarning ? " (missing!)" : " (current)"}
-          </option>
-          {branches
-            .filter((b) => b !== app.source.targetRevision)
-            .map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
-          {loadingBranches && (
-            <option disabled>Loading branches...</option>
-          )}
-        </select>
-
-        <button
-          style={{
-            ...s.applyBtn,
-            ...(!isChanged || updating ? s.applyBtnDisabled : {}),
-          }}
-          disabled={!isChanged || updating}
-          onClick={handleApply}
-          onMouseEnter={(e) => {
-            if (isChanged && !updating)
-              (e.currentTarget as HTMLElement).style.background =
-                "var(--accent-hover)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.background = "var(--accent)";
-          }}
-        >
-          {updating ? "Applying..." : "Apply"}
-        </button>
-      </div>
-
-      {result && (
-        <div style={s.successMsg}>
-          Updated successfully.{" "}
-          {result.commit_url && (
-            <a
-              href={result.commit_url}
-              target="_blank"
-              rel="noreferrer"
-              style={{ color: "var(--success)" }}
-            >
-              View commit
-            </a>
-          )}
+      {/* Branch selector */}
+      <div style={s.fieldGroup}>
+        <div style={s.fieldLabel}>
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+            <path d="M5 2V10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            <path d="M11 6V14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            <circle cx="5" cy="12" r="2" stroke="currentColor" strokeWidth="1.3" />
+            <circle cx="11" cy="4" r="2" stroke="currentColor" strokeWidth="1.3" />
+            <path d="M5 10C5 8 8 6 11 6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+          </svg>
+          Target Revision
         </div>
-      )}
-      {error && <div style={s.errorMsg}>{error}</div>}
+        <div style={s.fieldRow}>
+          <select
+            style={s.select}
+            value={selectedBranch}
+            onChange={(e) => setSelectedBranch(e.target.value)}
+            onFocus={loadBranches}
+          >
+            <option value={app.source.targetRevision}>
+              {app.source.targetRevision}
+              {hasWarning ? " (missing!)" : " (current)"}
+            </option>
+            {branches
+              .filter((b) => b !== app.source.targetRevision)
+              .map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            {loadingBranches && <option disabled>Loading branches...</option>}
+          </select>
+
+          <button
+            style={{
+              ...s.applyBtn,
+              ...(!isBranchChanged || updatingBranch ? s.applyBtnDisabled : {}),
+            }}
+            disabled={!isBranchChanged || updatingBranch}
+            onClick={handleApplyBranch}
+            onMouseEnter={(e) => {
+              if (isBranchChanged && !updatingBranch)
+                (e.currentTarget as HTMLElement).style.background = "var(--accent-hover)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = "var(--accent)";
+            }}
+          >
+            {updatingBranch ? "Applying..." : "Apply"}
+          </button>
+        </div>
+        {branchResult && (
+          <div style={s.successMsg}>
+            Branch updated.{" "}
+            {branchResult.commit_url && (
+              <a href={branchResult.commit_url} target="_blank" rel="noreferrer" style={{ color: "var(--success)" }}>
+                View commit
+              </a>
+            )}
+          </div>
+        )}
+        {branchError && <div style={s.errorMsg}>{branchError}</div>}
+      </div>
+
+      {/* Values files editor */}
+      <div style={s.fieldGroup}>
+        <div style={s.fieldLabel}>
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+            <rect x="2" y="1" width="12" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+            <path d="M5 5H11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M5 8H11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+            <path d="M5 11H9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+          </svg>
+          Values Files
+        </div>
+
+        <div style={s.valuesRow}>
+          {editedValues.map((vf, idx) => (
+            <span key={`${vf}-${idx}`} style={s.valuesChip}>
+              {vf}
+              <button style={s.removeBtn} onClick={() => removeValue(idx)} title="Remove">
+                &times;
+              </button>
+            </span>
+          ))}
+
+          <select
+            style={{
+              ...s.select,
+              maxWidth: 220,
+              flex: "none",
+              fontSize: 12,
+            }}
+            value=""
+            onChange={(e) => {
+              if (e.target.value) addValue(e.target.value);
+            }}
+            onFocus={loadValuesFiles}
+          >
+            <option value="">+ Add values file...</option>
+            {availableValues
+              .filter((f) => !editedValues.includes(f))
+              .map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+            {loadingValues && <option disabled>Loading files...</option>}
+          </select>
+
+          <button
+            style={{
+              ...s.applyBtn,
+              ...(!isValuesChanged || updatingValues ? s.applyBtnDisabled : {}),
+            }}
+            disabled={!isValuesChanged || updatingValues}
+            onClick={handleApplyValues}
+            onMouseEnter={(e) => {
+              if (isValuesChanged && !updatingValues)
+                (e.currentTarget as HTMLElement).style.background = "var(--accent-hover)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = "var(--accent)";
+            }}
+          >
+            {updatingValues ? "Applying..." : "Apply"}
+          </button>
+        </div>
+
+        {valuesResult && (
+          <div style={s.successMsg}>
+            Values updated.{" "}
+            {valuesResult.commit_url && (
+              <a href={valuesResult.commit_url} target="_blank" rel="noreferrer" style={{ color: "var(--success)" }}>
+                View commit
+              </a>
+            )}
+          </div>
+        )}
+        {valuesError && <div style={s.errorMsg}>{valuesError}</div>}
+      </div>
 
       <div style={s.definedAt}>
         Defined in: {app.defined_at}

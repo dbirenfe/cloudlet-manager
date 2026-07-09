@@ -96,6 +96,36 @@ export async function updateBranch(
   });
 }
 
+export interface ValuesFileList {
+  repo_url: string;
+  branch: string;
+  files: string[];
+}
+
+export async function fetchValuesFiles(
+  repoUrl: string,
+  branch: string = "main"
+): Promise<ValuesFileList> {
+  return request<ValuesFileList>(
+    `/api/values-files?repo_url=${encodeURIComponent(repoUrl)}&branch=${encodeURIComponent(branch)}`
+  );
+}
+
+export async function updateValuesFiles(
+  filePath: string,
+  appName: string,
+  valuesFiles: string[]
+): Promise<BranchUpdateResponse> {
+  return request<BranchUpdateResponse>("/api/update-values", {
+    method: "POST",
+    body: JSON.stringify({
+      file_path: filePath,
+      app_name: appName,
+      values_files: valuesFiles,
+    }),
+  });
+}
+
 export async function fetchAuthConfig(): Promise<{
   enabled: boolean;
   url?: string;

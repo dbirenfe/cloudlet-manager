@@ -7,6 +7,7 @@ from app.config import get_settings
 
 
 _branch_cache: TTLCache = TTLCache(maxsize=256, ttl=300)
+_files_cache: TTLCache = TTLCache(maxsize=256, ttl=300)
 
 
 def _headers() -> dict[str, str]:
@@ -98,6 +99,32 @@ async def list_branches(repo_url: str) -> list[str]:
 
     _branch_cache[cache_key] = branches
     return branches
+
+
+async def list_values_files(repo_url: str, branch: str = "main") -> list[str]:
+    """List YAML/YML files in a repo that could be used as Helm values files."""
+    owner_repo = _parse_repo_url(repo_url)
+    if not owner_repo:
+        return []
+
+    cache_key = f"{owner_repo}@{branch}:values"
+    if cache_key in _files_cache:
+        return _files_cache[cache_key]
+
+    s = get_settings()
+    try:
+        url = f"{s.github_api_url}/repos/{owner_repo}/git/trees/{branch}?recursive=1"
+        data = await _get(url)
+        files = [
+            item["path"]
+            for item in data.get("tree", [])
+            if item["type"] == "blob"
+            and (item["path"].endswith(".yaml") or item["path"].endswith(".yml"))
+        ]
+        _files_cache[cache_key] = files
+        return files
+    except Exception:
+        return []
 
 
 async def branch_exists(repo_url: str, branch_name: str) -> bool:
