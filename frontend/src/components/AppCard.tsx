@@ -200,10 +200,10 @@ export default function AppCard({ app, onUpdated }: AppCardProps) {
             {app.source.repoURL.replace("https://github.com/", "")}
           </a>
         </span>
-        {app.source.helm?.valuesFiles && (
+        {Array.isArray(app.source.helm?.valuesFiles) && (
           <span style={s.metaItem}>
             <span style={s.metaLabel}>Values: </span>
-            {(app.source.helm.valuesFiles as string[]).join(", ")}
+            {(app.source.helm!.valuesFiles as string[]).join(", ")}
           </span>
         )}
       </div>
