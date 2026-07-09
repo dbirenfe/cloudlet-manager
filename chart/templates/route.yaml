@@ -1,0 +1,24 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: cloudlet-manager
+  namespace: {{ include "cloudlet-manager.namespace" . }}
+  labels:
+    {{- include "cloudlet-manager.frontendLabels" . | nindent 4 }}
+spec:
+  {{- if .Values.route.host }}
+  host: {{ .Values.route.host }}
+  {{- end }}
+  to:
+    kind: Service
+    name: cloudlet-frontend
+    weight: 100
+  port:
+    {{- if .Values.sso.enabled }}
+    targetPort: oauth-proxy
+    {{- else }}
+    targetPort: http
+    {{- end }}
+  tls:
+    termination: {{ .Values.route.tls.termination }}
+    insecureEdgeTerminationPolicy: {{ .Values.route.tls.insecureEdgeTerminationPolicy }}

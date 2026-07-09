@@ -1,0 +1,126 @@
+########################################################
+# Cloudlet Manager - Helm Values
+# Fill in all required fields before deploying.
+# Sensitive values are pulled from Vault via ExternalSecrets.
+########################################################
+
+# -- Namespace to deploy into
+namespace: cloudlet-manager
+
+# -- Backend (FastAPI)
+backend:
+  # -- Container image for the backend
+  image:
+    repository: ""   # e.g. registry.internal.example.com/cloudlet-manager/backend
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# -- Frontend (Nginx + React)
+frontend:
+  # -- Container image for the frontend
+  image:
+    repository: ""   # e.g. registry.internal.example.com/cloudlet-manager/frontend
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+# -- OAuth2 Proxy sidecar (handles SSO login via RHBK)
+oauthProxy:
+  image:
+    repository: ""   # e.g. registry.internal.example.com/oauth2-proxy/oauth2-proxy
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 64Mi
+
+# -- Git server configuration (non-sensitive)
+git:
+  # -- The cloudlets-spec repository in "owner/repo" format
+  specRepo: ""       # e.g. "myorg/cloudlets-spec"
+  # -- Branch to read/write in the spec repo
+  specBranch: "main"
+  # -- Git API base URL (GitHub, Gitea, GitLab, etc.)
+  apiUrl: ""         # e.g. "https://gitea.internal.example.com/api/v1"
+
+# -- SSO / RHBK (Keycloak) configuration (non-sensitive parts)
+sso:
+  # -- Enable SSO authentication
+  enabled: true
+  # -- Keycloak base URL (no trailing slash)
+  keycloakUrl: ""    # e.g. "https://keycloak.apps.cluster.example.com"
+  # -- Keycloak realm name
+  realm: ""          # e.g. "cloudlet"
+  # -- OIDC client ID registered in RHBK for this app
+  clientId: ""       # e.g. "cloudlet-manager"
+  # -- Groups that are allowed to access the application (list)
+  # Users not in these groups will be denied access.
+  allowedGroups:
+    - "/cloudlet-admins"
+
+# -- OpenShift Route configuration
+route:
+  # -- Hostname for the route
+  host: ""           # e.g. "cloudlet-manager.apps.cluster.example.com"
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+
+# -- Image pull secret name (if your internal registry requires auth)
+imagePullSecret: ""
+
+# -- CORS origins for the backend (usually just the route URL)
+corsOrigins: '["*"]'
+
+# -- Branch cache TTL in seconds
+branchCacheTtl: 300
+
+########################################################
+# Vault / ExternalSecrets configuration
+#
+# The chart creates ExternalSecret resources that pull
+# sensitive values from HashiCorp Vault into K8s Secrets.
+# You must have the ExternalSecrets Operator installed
+# and a SecretStore/ClusterSecretStore configured.
+########################################################
+vault:
+  # -- Name of the SecretStore or ClusterSecretStore
+  secretStoreName: "vault-backend"
+  # -- Kind: "SecretStore" or "ClusterSecretStore"
+  secretStoreKind: "ClusterSecretStore"
+  # -- Refresh interval for syncing secrets from Vault
+  refreshInterval: "1h"
+
+  # -- Vault paths for each secret
+  paths:
+    # -- Path in Vault for the Git PAT token
+    # Expected Vault key: "token"
+    gitToken: "secret/data/cloudlet-manager/git"
+
+    # -- Path in Vault for RHBK/Keycloak client secret
+    # Expected Vault key: "client-secret"
+    ssoClientSecret: "secret/data/cloudlet-manager/sso"
+
+    # -- Path in Vault for the OAuth2 Proxy cookie secret
+    # Expected Vault key: "cookie-secret"
+    # Generate with: python3 -c "import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+    oauthCookieSecret: "secret/data/cloudlet-manager/oauth-proxy"

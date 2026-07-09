@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudlet-backend
+  namespace: {{ include "cloudlet-manager.namespace" . }}
+  labels:
+    {{- include "cloudlet-manager.backendLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.backend.replicas }}
+  selector:
+    matchLabels:
+      {{- include "cloudlet-manager.selectorBackend" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cloudlet-manager.selectorBackend" . | nindent 8 }}
+    spec:
+      {{- if .Values.imagePullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecret }}
+      {{- end }}
+      containers:
+        - name: backend
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          ports:
+            - containerPort: 8000
+          env:
+            - name: CLOUDLET_GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cloudlet-git-token
+                  key: token
+            - name: CLOUDLET_GITHUB_SPEC_REPO
+              value: {{ .Values.git.specRepo | quote }}
+            - name: CLOUDLET_GITHUB_SPEC_BRANCH
+              value: {{ .Values.git.specBranch | quote }}
+            - name: CLOUDLET_GITHUB_API_URL
+              value: {{ .Values.git.apiUrl | quote }}
+            - name: CLOUDLET_CORS_ORIGINS
+              value: {{ .Values.corsOrigins | quote }}
+            - name: CLOUDLET_BRANCH_CACHE_TTL
+              value: {{ .Values.branchCacheTtl | quote }}
+            {{- if .Values.sso.enabled }}
+            - name: CLOUDLET_KEYCLOAK_URL
+              value: {{ .Values.sso.keycloakUrl | quote }}
+            - name: CLOUDLET_KEYCLOAK_REALM
+              value: {{ .Values.sso.realm | quote }}
+            - name: CLOUDLET_KEYCLOAK_CLIENT_ID
+              value: {{ .Values.sso.clientId | quote }}
+            - name: CLOUDLET_KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: cloudlet-sso-secret
+                  key: client-secret
+            - name: CLOUDLET_ALLOWED_GROUPS
+              value: {{ .Values.sso.allowedGroups | toJson | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10

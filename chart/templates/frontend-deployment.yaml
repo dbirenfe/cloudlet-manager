@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudlet-frontend
+  namespace: {{ include "cloudlet-manager.namespace" . }}
+  labels:
+    {{- include "cloudlet-manager.frontendLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.frontend.replicas }}
+  selector:
+    matchLabels:
+      {{- include "cloudlet-manager.selectorFrontend" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cloudlet-manager.selectorFrontend" . | nindent 8 }}
+    spec:
+      {{- if .Values.imagePullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecret }}
+      {{- end }}
+      containers:
+        # ── Nginx (serves React + proxies /api/ to backend) ──
+        - name: frontend
+          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d
+          resources:
+            {{- toYaml .Values.frontend.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 10
+
+        {{- if .Values.sso.enabled }}
+        # ── OAuth2 Proxy sidecar (handles OIDC login via RHBK) ──
+        - name: oauth2-proxy
+          image: "{{ .Values.oauthProxy.image.repository }}:{{ .Values.oauthProxy.image.tag }}"
+          imagePullPolicy: {{ .Values.oauthProxy.image.pullPolicy }}
+          ports:
+            - containerPort: 4180
+          args:
+            - --http-address=0.0.0.0:4180
+            - --upstream=http://localhost:8080
+            - --provider=oidc
+            - --oidc-issuer-url={{ .Values.sso.keycloakUrl }}/realms/{{ .Values.sso.realm }}
+            - --client-id={{ .Values.sso.clientId }}
+            - --email-domain=*
+            - --pass-authorization-header=true
+            - --pass-access-token=true
+            - --set-authorization-header=true
+            - --cookie-secure=true
+            - --cookie-httponly=true
+            - --cookie-samesite=lax
+            - --cookie-name=_cloudlet_oauth2
+            - --skip-provider-button=true
+            - --code-challenge-method=S256
+            {{- range .Values.sso.allowedGroups }}
+            - --allowed-group={{ . }}
+            {{- end }}
+            - --oidc-groups-claim=groups
+            - --redirect-url=https://{{ .Values.route.host }}/oauth2/callback
+          env:
+            - name: OAUTH2_PROXY_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: cloudlet-sso-secret
+                  key: client-secret
+            - name: OAUTH2_PROXY_COOKIE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: cloudlet-oauth-proxy-secret
+                  key: cookie-secret
+          resources:
+            {{- toYaml .Values.oauthProxy.resources | nindent 12 }}
+        {{- end }}
+
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: cloudlet-nginx-config

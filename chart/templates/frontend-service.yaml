@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloudlet-frontend
+  namespace: {{ include "cloudlet-manager.namespace" . }}
+  labels:
+    {{- include "cloudlet-manager.frontendLabels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "cloudlet-manager.selectorFrontend" . | nindent 4 }}
+  ports:
+    {{- if .Values.sso.enabled }}
+    # When SSO is enabled, traffic enters through the oauth2-proxy sidecar
+    - name: oauth-proxy
+      port: 4180
+      targetPort: 4180
+      protocol: TCP
+    {{- else }}
+    # When SSO is disabled, traffic goes directly to nginx
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+    {{- end }}
