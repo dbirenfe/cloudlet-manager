@@ -1,16 +1,20 @@
 import { type CSSProperties, useEffect, useState } from "react";
-import type { AppConfig, BranchUpdateResponse } from "../api/client";
+import type { AppConfig, UpdateResponse } from "../api/client";
 import {
   fetchBranches,
   updateBranch,
   fetchValuesFiles,
-  updateValuesFiles,
+  updateValuesFile,
+  inheritField,
 } from "../api/client";
 
 interface AppCardProps {
   app: AppConfig;
+  scopeFile: string;
   onUpdated: () => void;
 }
+
+const INHERIT_VALUE = "__INHERIT__";
 
 const s: Record<string, CSSProperties> = {
   card: {
@@ -48,6 +52,15 @@ const s: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     gap: 4,
+  },
+  inheritedBadge: {
+    fontSize: 10,
+    fontWeight: 500,
+    color: "var(--text-muted)",
+    background: "var(--border)",
+    padding: "2px 6px",
+    borderRadius: 4,
+    marginLeft: 4,
   },
   meta: {
     display: "flex",
@@ -139,66 +152,61 @@ const s: Record<string, CSSProperties> = {
     marginTop: 12,
     paddingTop: 10,
     borderTop: "1px solid var(--border)",
-    fontStyle: "italic",
   },
-  valuesChip: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-    fontSize: 12,
-    background: "var(--bg-input)",
-    border: "1px solid var(--border)",
-    borderRadius: 6,
-    padding: "4px 8px",
-    color: "var(--text-primary)",
-  },
-  removeBtn: {
-    background: "none",
-    border: "none",
-    color: "var(--text-muted)",
-    cursor: "pointer",
-    fontSize: 14,
-    lineHeight: 1,
-    padding: "0 2px",
-    display: "flex",
-    alignItems: "center",
-  },
-  valuesRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    flexWrap: "wrap" as const,
+  sourceFile: {
+    fontFamily: "monospace",
+    fontSize: 11,
+    color: "var(--text-secondary)",
   },
 };
 
-export default function AppCard({ app, onUpdated }: AppCardProps) {
+function BranchIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+      <path d="M5 2V10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M11 6V14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <circle cx="5" cy="12" r="2" stroke="currentColor" strokeWidth="1.3" />
+      <circle cx="11" cy="4" r="2" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M5 10C5 8 8 6 11 6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function FileIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+      <rect x="2" y="1" width="12" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M5 5H11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M5 8H11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M5 11H9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
+  const { branch_info, values_info } = app;
+
   const [branches, setBranches] = useState<string[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(false);
-  const [selectedBranch, setSelectedBranch] = useState(app.source.targetRevision);
-  const [updatingBranch, setUpdatingBranch] = useState(false);
-  const [branchResult, setBranchResult] = useState<BranchUpdateResponse | null>(null);
-  const [branchError, setBranchError] = useState<string | null>(null);
+  const [selectedBranch, setSelectedBranch] = useState(
+    branch_info.is_local ? branch_info.value : INHERIT_VALUE
+  );
 
-  const currentValues: string[] = Array.isArray(app.source.helm?.valuesFiles)
-    ? (app.source.helm!.valuesFiles as string[])
-    : [];
-  const [editedValues, setEditedValues] = useState<string[]>(currentValues);
-  const [availableValues, setAvailableValues] = useState<string[]>([]);
+  const [valuesFiles, setValuesFiles] = useState<string[]>([]);
   const [loadingValues, setLoadingValues] = useState(false);
-  const [updatingValues, setUpdatingValues] = useState(false);
-  const [valuesResult, setValuesResult] = useState<BranchUpdateResponse | null>(null);
-  const [valuesError, setValuesError] = useState<string | null>(null);
+  const [selectedValues, setSelectedValues] = useState(
+    values_info.is_local ? values_info.value : INHERIT_VALUE
+  );
+
+  const [updating, setUpdating] = useState(false);
+  const [result, setResult] = useState<UpdateResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setSelectedBranch(app.source.targetRevision);
-    setBranchResult(null);
-    setBranchError(null);
-    const newVals = Array.isArray(app.source.helm?.valuesFiles)
-      ? (app.source.helm!.valuesFiles as string[])
-      : [];
-    setEditedValues(newVals);
-    setValuesResult(null);
-    setValuesError(null);
+    setSelectedBranch(branch_info.is_local ? branch_info.value : INHERIT_VALUE);
+    setSelectedValues(values_info.is_local ? values_info.value : INHERIT_VALUE);
+    setResult(null);
+    setError(null);
   }, [app]);
 
   const loadBranches = async () => {
@@ -215,63 +223,75 @@ export default function AppCard({ app, onUpdated }: AppCardProps) {
   };
 
   const loadValuesFiles = async () => {
-    if (availableValues.length > 0) return;
+    if (valuesFiles.length > 0) return;
     setLoadingValues(true);
     try {
-      const data = await fetchValuesFiles(app.source.repoURL, app.source.targetRevision);
-      setAvailableValues(data.files);
+      const data = await fetchValuesFiles(
+        app.source.repoURL,
+        app.source.targetRevision || "main"
+      );
+      setValuesFiles(data.files);
     } catch {
-      setAvailableValues([]);
+      setValuesFiles([]);
     } finally {
       setLoadingValues(false);
     }
   };
 
-  const handleApplyBranch = async () => {
-    if (selectedBranch === app.source.targetRevision) return;
-    setUpdatingBranch(true);
-    setBranchError(null);
-    setBranchResult(null);
+  const currentBranchState = branch_info.is_local
+    ? branch_info.value
+    : INHERIT_VALUE;
+  const currentValuesState = values_info.is_local
+    ? values_info.value
+    : INHERIT_VALUE;
+
+  const isBranchChanged = selectedBranch !== currentBranchState;
+  const isValuesChanged = selectedValues !== currentValuesState;
+  const hasAnyChange = isBranchChanged || isValuesChanged;
+
+  const handleApply = async () => {
+    if (!hasAnyChange) return;
+    setUpdating(true);
+    setError(null);
+    setResult(null);
+
     try {
-      const res = await updateBranch(app.defined_at, app.name, selectedBranch);
-      setBranchResult(res);
+      let lastResult: UpdateResponse | null = null;
+
+      if (isBranchChanged) {
+        if (selectedBranch === INHERIT_VALUE) {
+          lastResult = await inheritField(scopeFile, app.name, "targetRevision");
+        } else {
+          lastResult = await updateBranch(scopeFile, app.name, selectedBranch);
+        }
+      }
+
+      if (isValuesChanged) {
+        if (selectedValues === INHERIT_VALUE) {
+          lastResult = await inheritField(scopeFile, app.name, "valuesFiles");
+        } else {
+          lastResult = await updateValuesFile(scopeFile, app.name, selectedValues);
+        }
+      }
+
+      setResult(lastResult);
       onUpdated();
     } catch (e) {
-      setBranchError(e instanceof Error ? e.message : "Update failed");
+      setError(e instanceof Error ? e.message : "Update failed");
     } finally {
-      setUpdatingBranch(false);
-    }
-  };
-
-  const handleApplyValues = async () => {
-    setUpdatingValues(true);
-    setValuesError(null);
-    setValuesResult(null);
-    try {
-      const res = await updateValuesFiles(app.defined_at, app.name, editedValues);
-      setValuesResult(res);
-      onUpdated();
-    } catch (e) {
-      setValuesError(e instanceof Error ? e.message : "Update failed");
-    } finally {
-      setUpdatingValues(false);
-    }
-  };
-
-  const removeValue = (idx: number) => {
-    setEditedValues((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  const addValue = (file: string) => {
-    if (file && !editedValues.includes(file)) {
-      setEditedValues((prev) => [...prev, file]);
+      setUpdating(false);
     }
   };
 
   const hasWarning = app.branch_exists === false;
-  const isBranchChanged = selectedBranch !== app.source.targetRevision;
-  const isValuesChanged =
-    JSON.stringify(editedValues) !== JSON.stringify(currentValues);
+
+  const inheritBranchLabel = branch_info.parent_value
+    ? `Inherit from parent scope (${branch_info.parent_value})`
+    : "Inherit from parent scope";
+
+  const inheritValuesLabel = values_info.parent_value
+    ? `Inherit from parent scope (${values_info.parent_value})`
+    : "Inherit from parent scope";
 
   return (
     <div style={{ ...s.card, ...(hasWarning ? s.cardWarning : {}) }}>
@@ -301,14 +321,11 @@ export default function AppCard({ app, onUpdated }: AppCardProps) {
       {/* Branch selector */}
       <div style={s.fieldGroup}>
         <div style={s.fieldLabel}>
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-            <path d="M5 2V10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-            <path d="M11 6V14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-            <circle cx="5" cy="12" r="2" stroke="currentColor" strokeWidth="1.3" />
-            <circle cx="11" cy="4" r="2" stroke="currentColor" strokeWidth="1.3" />
-            <path d="M5 10C5 8 8 6 11 6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-          </svg>
+          <BranchIcon />
           Target Revision
+          {!branch_info.is_local && (
+            <span style={s.inheritedBadge}>inherited</span>
+          )}
         </div>
         <div style={s.fieldRow}>
           <select
@@ -317,12 +334,21 @@ export default function AppCard({ app, onUpdated }: AppCardProps) {
             onChange={(e) => setSelectedBranch(e.target.value)}
             onFocus={loadBranches}
           >
-            <option value={app.source.targetRevision}>
-              {app.source.targetRevision}
-              {hasWarning ? " (missing!)" : " (current)"}
+            {branch_info.parent_value !== null && (
+              <option value={INHERIT_VALUE}>{inheritBranchLabel}</option>
+            )}
+            <option value={branch_info.value}>
+              {branch_info.value}
+              {hasWarning ? " (missing!)" : ""}
+              {selectedBranch !== INHERIT_VALUE &&
+                branch_info.value === currentBranchState
+                ? " (current)"
+                : ""}
             </option>
             {branches
-              .filter((b) => b !== app.source.targetRevision)
+              .filter(
+                (b) => b !== branch_info.value
+              )
               .map((b) => (
                 <option key={b} value={b}>
                   {b}
@@ -330,76 +356,44 @@ export default function AppCard({ app, onUpdated }: AppCardProps) {
               ))}
             {loadingBranches && <option disabled>Loading branches...</option>}
           </select>
-
-          <button
-            style={{
-              ...s.applyBtn,
-              ...(!isBranchChanged || updatingBranch ? s.applyBtnDisabled : {}),
-            }}
-            disabled={!isBranchChanged || updatingBranch}
-            onClick={handleApplyBranch}
-            onMouseEnter={(e) => {
-              if (isBranchChanged && !updatingBranch)
-                (e.currentTarget as HTMLElement).style.background = "var(--accent-hover)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.background = "var(--accent)";
-            }}
-          >
-            {updatingBranch ? "Applying..." : "Apply"}
-          </button>
         </div>
-        {branchResult && (
-          <div style={s.successMsg}>
-            Branch updated.{" "}
-            {branchResult.commit_url && (
-              <a href={branchResult.commit_url} target="_blank" rel="noreferrer" style={{ color: "var(--success)" }}>
-                View commit
-              </a>
-            )}
+        {!branch_info.is_local && branch_info.defined_at && (
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+            From <span style={s.sourceFile}>{branch_info.defined_at}</span>
           </div>
         )}
-        {branchError && <div style={s.errorMsg}>{branchError}</div>}
       </div>
 
-      {/* Values files editor */}
+      {/* Values file selector */}
       <div style={s.fieldGroup}>
         <div style={s.fieldLabel}>
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-            <rect x="2" y="1" width="12" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
-            <path d="M5 5H11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-            <path d="M5 8H11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-            <path d="M5 11H9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-          </svg>
-          Values Files
+          <FileIcon />
+          Values File
+          {!values_info.is_local && (
+            <span style={s.inheritedBadge}>inherited</span>
+          )}
         </div>
-
-        <div style={s.valuesRow}>
-          {editedValues.map((vf, idx) => (
-            <span key={`${vf}-${idx}`} style={s.valuesChip}>
-              {vf}
-              <button style={s.removeBtn} onClick={() => removeValue(idx)} title="Remove">
-                &times;
-              </button>
-            </span>
-          ))}
-
+        <div style={s.fieldRow}>
           <select
-            style={{
-              ...s.select,
-              maxWidth: 220,
-              flex: "none",
-              fontSize: 12,
-            }}
-            value=""
-            onChange={(e) => {
-              if (e.target.value) addValue(e.target.value);
-            }}
+            style={s.select}
+            value={selectedValues}
+            onChange={(e) => setSelectedValues(e.target.value)}
             onFocus={loadValuesFiles}
           >
-            <option value="">+ Add values file...</option>
-            {availableValues
-              .filter((f) => !editedValues.includes(f))
+            {values_info.parent_value !== null && (
+              <option value={INHERIT_VALUE}>{inheritValuesLabel}</option>
+            )}
+            {values_info.value && (
+              <option value={values_info.value}>
+                {values_info.value}
+                {selectedValues !== INHERIT_VALUE &&
+                  values_info.value === currentValuesState
+                  ? " (current)"
+                  : ""}
+              </option>
+            )}
+            {valuesFiles
+              .filter((f) => f !== values_info.value)
               .map((f) => (
                 <option key={f} value={f}>
                   {f}
@@ -407,42 +401,77 @@ export default function AppCard({ app, onUpdated }: AppCardProps) {
               ))}
             {loadingValues && <option disabled>Loading files...</option>}
           </select>
-
-          <button
-            style={{
-              ...s.applyBtn,
-              ...(!isValuesChanged || updatingValues ? s.applyBtnDisabled : {}),
-            }}
-            disabled={!isValuesChanged || updatingValues}
-            onClick={handleApplyValues}
-            onMouseEnter={(e) => {
-              if (isValuesChanged && !updatingValues)
-                (e.currentTarget as HTMLElement).style.background = "var(--accent-hover)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.background = "var(--accent)";
-            }}
-          >
-            {updatingValues ? "Applying..." : "Apply"}
-          </button>
         </div>
-
-        {valuesResult && (
-          <div style={s.successMsg}>
-            Values updated.{" "}
-            {valuesResult.commit_url && (
-              <a href={valuesResult.commit_url} target="_blank" rel="noreferrer" style={{ color: "var(--success)" }}>
-                View commit
-              </a>
-            )}
+        {!values_info.is_local && values_info.defined_at && (
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+            From <span style={s.sourceFile}>{values_info.defined_at}</span>
           </div>
         )}
-        {valuesError && <div style={s.errorMsg}>{valuesError}</div>}
       </div>
 
+      {/* Single apply button for all changes */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <button
+          style={{
+            ...s.applyBtn,
+            ...(!hasAnyChange || updating ? s.applyBtnDisabled : {}),
+          }}
+          disabled={!hasAnyChange || updating}
+          onClick={handleApply}
+          onMouseEnter={(e) => {
+            if (hasAnyChange && !updating)
+              (e.currentTarget as HTMLElement).style.background =
+                "var(--accent-hover)";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.background = "var(--accent)";
+          }}
+        >
+          {updating ? "Applying..." : "Apply Changes"}
+        </button>
+        {hasAnyChange && (
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+            {[
+              isBranchChanged &&
+                (selectedBranch === INHERIT_VALUE
+                  ? "branch: inherit"
+                  : `branch: ${selectedBranch}`),
+              isValuesChanged &&
+                (selectedValues === INHERIT_VALUE
+                  ? "values: inherit"
+                  : `values: ${selectedValues}`),
+            ]
+              .filter(Boolean)
+              .join(", ")}
+          </span>
+        )}
+      </div>
+
+      {result && (
+        <div style={s.successMsg}>
+          Updated successfully.{" "}
+          {result.commit_url && (
+            <a
+              href={result.commit_url}
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: "var(--success)" }}
+            >
+              View commit
+            </a>
+          )}
+        </div>
+      )}
+      {error && <div style={s.errorMsg}>{error}</div>}
+
       <div style={s.definedAt}>
-        Defined in: {app.defined_at}
-        {app.inherited_from && ` (overrides ${app.inherited_from})`}
+        <span style={s.sourceFile}>{app.defined_at}</span>
+        {app.inherited_from && (
+          <span>
+            {" "}
+            (overrides <span style={s.sourceFile}>{app.inherited_from}</span>)
+          </span>
+        )}
       </div>
     </div>
   );

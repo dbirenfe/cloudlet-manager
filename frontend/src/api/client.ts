@@ -15,6 +15,13 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
+export interface FieldInfo {
+  value: string;
+  defined_at: string;
+  is_local: boolean;
+  parent_value: string | null;
+}
+
 export interface AppSource {
   repoURL: string;
   targetRevision: string;
@@ -27,6 +34,8 @@ export interface AppConfig {
   defined_at: string;
   inherited_from: string | null;
   branch_exists: boolean | null;
+  branch_info: FieldInfo;
+  values_info: FieldInfo;
 }
 
 export interface ScopeApps {
@@ -53,7 +62,13 @@ export interface BranchList {
   branches: string[];
 }
 
-export interface BranchUpdateResponse {
+export interface ValuesFileList {
+  repo_url: string;
+  branch: string;
+  files: string[];
+}
+
+export interface UpdateResponse {
   success: boolean;
   message: string;
   commit_url: string | null;
@@ -85,8 +100,8 @@ export async function updateBranch(
   filePath: string,
   appName: string,
   newBranch: string
-): Promise<BranchUpdateResponse> {
-  return request<BranchUpdateResponse>("/api/update-branch", {
+): Promise<UpdateResponse> {
+  return request<UpdateResponse>("/api/update-branch", {
     method: "POST",
     body: JSON.stringify({
       file_path: filePath,
@@ -94,12 +109,6 @@ export async function updateBranch(
       new_branch: newBranch,
     }),
   });
-}
-
-export interface ValuesFileList {
-  repo_url: string;
-  branch: string;
-  files: string[];
 }
 
 export async function fetchValuesFiles(
@@ -111,17 +120,32 @@ export async function fetchValuesFiles(
   );
 }
 
-export async function updateValuesFiles(
+export async function updateValuesFile(
   filePath: string,
   appName: string,
-  valuesFiles: string[]
-): Promise<BranchUpdateResponse> {
-  return request<BranchUpdateResponse>("/api/update-values", {
+  valuesFile: string
+): Promise<UpdateResponse> {
+  return request<UpdateResponse>("/api/update-values", {
     method: "POST",
     body: JSON.stringify({
       file_path: filePath,
       app_name: appName,
-      values_files: valuesFiles,
+      values_file: valuesFile,
+    }),
+  });
+}
+
+export async function inheritField(
+  filePath: string,
+  appName: string,
+  field: string
+): Promise<UpdateResponse> {
+  return request<UpdateResponse>("/api/inherit-field", {
+    method: "POST",
+    body: JSON.stringify({
+      file_path: filePath,
+      app_name: appName,
+      field: field,
     }),
   });
 }

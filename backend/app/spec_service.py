@@ -1,6 +1,7 @@
 """Service layer for parsing the cloudlets-spec repo structure and resolving overrides."""
 
 import asyncio
+import yaml
 from app.config import get_settings
 from app.github_client import (
     get_repo_tree,
@@ -15,6 +16,7 @@ from app.models import (
     AppConfig,
     AppSource,
     ClusterInfo,
+    FieldInfo,
     RepoStructure,
     ScopeApps,
 )
@@ -87,16 +89,25 @@ async def _load_apps_file(path: str) -> dict:
         return {}
 
 
-def _merge_apps(base: dict, override: dict) -> dict:
-    """
-    Merge override apps into base. For each app in override, it fully replaces
-    that app's config in the base. Apps not in override keep base config.
-    """
-    merged = dict(base)
-    for app_name, app_config in override.items():
-        if isinstance(app_config, dict):
-            merged[app_name] = app_config
-    return merged
+def _extract_values_file(app_data: dict) -> str | None:
+    """Extract the first valuesFile from an app config, or None."""
+    helm = app_data.get("source", {}).get("helm", {})
+    if not isinstance(helm, dict):
+        return None
+    vf = helm.get("valuesFiles", [])
+    if isinstance(vf, list) and vf:
+        return vf[0]
+    return None
+
+
+def _extract_target_revision(app_data: dict) -> str | None:
+    """Extract targetRevision from an app config, or None."""
+    return app_data.get("source", {}).get("targetRevision")
+
+
+def _extract_repo_url(app_data: dict) -> str | None:
+    """Extract repoURL from an app config, or None."""
+    return app_data.get("source", {}).get("repoURL")
 
 
 async def get_apps_for_scope(
@@ -106,36 +117,56 @@ async def get_apps_for_scope(
 ) -> ScopeApps:
     """
     Get the resolved app configurations for a given scope.
-    Applies the override chain: root -> flavor -> env -> cluster
+    Uses deep field-level merge: root -> flavor -> env -> cluster.
+    Each field (targetRevision, valuesFiles) is tracked independently.
     """
     layers: list[tuple[str, str]] = []
 
     layers.append(("root", APPS_FILENAME))
-
     if flavor:
         layers.append(("flavor", f"{flavor}/{APPS_FILENAME}"))
-
     if flavor and env:
         layers.append(("env", f"{flavor}/{env}/{APPS_FILENAME}"))
-
     if flavor and env and cluster:
         layers.append(("cluster", f"{flavor}/{env}/{cluster}.yaml"))
 
-    merged_apps: dict = {}
-    app_origins: dict[str, str] = {}
-    app_inherited: dict[str, str | None] = {}
+    current_scope_path = layers[-1][1]
 
-    for scope_type, path in layers:
+    # Per-app, per-field tracking: list of (value, file_path) entries in layer order
+    # Each entry means "this file sets this field to this value"
+    app_fields: dict[str, dict[str, list[tuple[str, str]]]] = {}
+    # Track which apps appear in which files
+    app_files: dict[str, list[str]] = {}
+
+    for _, path in layers:
         raw = await _load_apps_file(path)
-        for app_name in raw:
-            if isinstance(raw[app_name], dict):
-                if app_name in app_origins:
-                    app_inherited[app_name] = app_origins[app_name]
-                else:
-                    app_inherited[app_name] = None
-                app_origins[app_name] = path
-        merged_apps = _merge_apps(merged_apps, raw)
+        for app_name, app_data in raw.items():
+            if not isinstance(app_data, dict):
+                continue
 
+            if app_name not in app_fields:
+                app_fields[app_name] = {
+                    "repoURL": [],
+                    "targetRevision": [],
+                    "valuesFiles": [],
+                }
+                app_files[app_name] = []
+
+            app_files[app_name].append(path)
+
+            repo = _extract_repo_url(app_data)
+            if repo is not None:
+                app_fields[app_name]["repoURL"].append((repo, path))
+
+            tr = _extract_target_revision(app_data)
+            if tr is not None:
+                app_fields[app_name]["targetRevision"].append((tr, path))
+
+            vf = _extract_values_file(app_data)
+            if vf is not None:
+                app_fields[app_name]["valuesFiles"].append((vf, path))
+
+    # Build AppConfig list
     scope_parts = []
     if flavor:
         scope_parts.append(flavor)
@@ -156,24 +187,86 @@ async def get_apps_for_scope(
     apps: list[AppConfig] = []
     branch_checks = []
 
-    for app_name, app_data in merged_apps.items():
-        if not isinstance(app_data, dict) or "source" not in app_data:
+    for app_name, fields in app_fields.items():
+        repo_entries = fields["repoURL"]
+        tr_entries = fields["targetRevision"]
+        vf_entries = fields["valuesFiles"]
+
+        if not repo_entries:
             continue
-        source = app_data["source"]
+
+        repo_url = repo_entries[-1][0]
+        effective_branch = tr_entries[-1][0] if tr_entries else ""
+        effective_values = vf_entries[-1][0] if vf_entries else ""
+
+        # Build branch FieldInfo
+        if tr_entries:
+            last_val, last_path = tr_entries[-1]
+            is_local = last_path == current_scope_path
+            parent_val = None
+            if is_local and len(tr_entries) >= 2:
+                parent_val = tr_entries[-2][0]
+            elif not is_local:
+                parent_val = last_val
+            branch_info = FieldInfo(
+                value=last_val,
+                defined_at=last_path,
+                is_local=is_local,
+                parent_value=parent_val,
+            )
+        else:
+            branch_info = FieldInfo(
+                value="",
+                defined_at="",
+                is_local=False,
+                parent_value=None,
+            )
+
+        # Build values FieldInfo
+        if vf_entries:
+            last_val, last_path = vf_entries[-1]
+            is_local = last_path == current_scope_path
+            parent_val = None
+            if is_local and len(vf_entries) >= 2:
+                parent_val = vf_entries[-2][0]
+            elif not is_local:
+                parent_val = last_val
+            values_info = FieldInfo(
+                value=last_val,
+                defined_at=last_path,
+                is_local=is_local,
+                parent_value=parent_val,
+            )
+        else:
+            values_info = FieldInfo(
+                value="",
+                defined_at="",
+                is_local=False,
+                parent_value=None,
+            )
+
+        files_list = app_files[app_name]
+        defined_at = files_list[-1]
+        inherited_from = files_list[-2] if len(files_list) >= 2 else None
+
+        helm_data = None
+        if effective_values:
+            helm_data = {"valuesFiles": [effective_values]}
+
         app = AppConfig(
             name=app_name,
             source=AppSource(
-                repoURL=source.get("repoURL", ""),
-                targetRevision=source.get("targetRevision", ""),
-                helm=source.get("helm"),
+                repoURL=repo_url,
+                targetRevision=effective_branch,
+                helm=helm_data,
             ),
-            defined_at=app_origins.get(app_name, "unknown"),
-            inherited_from=app_inherited.get(app_name),
+            defined_at=defined_at,
+            inherited_from=inherited_from,
+            branch_info=branch_info,
+            values_info=values_info,
         )
         apps.append(app)
-        branch_checks.append(
-            branch_exists(source.get("repoURL", ""), source.get("targetRevision", ""))
-        )
+        branch_checks.append(branch_exists(repo_url, effective_branch))
 
     exists_results = await asyncio.gather(*branch_checks, return_exceptions=True)
     for i, result in enumerate(exists_results):
@@ -185,11 +278,6 @@ async def get_apps_for_scope(
     return ScopeApps(scope=scope_str, scope_type=scope_type, apps=apps)
 
 
-async def get_raw_apps_at_path(file_path: str) -> dict:
-    """Get the raw (non-merged) apps defined at a specific file path."""
-    return await _load_apps_file(file_path)
-
-
 async def update_app_branch(
     file_path: str,
     app_name: str,
@@ -197,36 +285,67 @@ async def update_app_branch(
 ) -> dict:
     """
     Update the targetRevision for a specific app in a specific file.
-    Returns commit info on success.
+    If the app doesn't exist in the file yet, creates a minimal override entry.
     """
     s = get_settings()
     content = await get_file_content(s.github_spec_repo, file_path, s.github_spec_branch)
     data = parse_yaml(content)
 
-    if app_name not in data:
-        raise ValueError(f"App '{app_name}' not found in {file_path}")
+    if app_name in data:
+        if "source" not in data[app_name]:
+            data[app_name]["source"] = {}
+        old_branch = data[app_name]["source"].get("targetRevision", "inherited")
+        data[app_name]["source"]["targetRevision"] = new_branch
+    else:
+        old_branch = "inherited"
+        data[app_name] = {"source": {"targetRevision": new_branch}}
 
-    old_branch = data[app_name].get("source", {}).get("targetRevision", "unknown")
-    data[app_name]["source"]["targetRevision"] = new_branch
-
-    import yaml
     new_content = yaml.dump(data, default_flow_style=False, sort_keys=False)
-
     message = f"cloudlet-manager: update {app_name} targetRevision from '{old_branch}' to '{new_branch}' in {file_path}"
-    result = await update_file(
+    return await update_file(
         s.github_spec_repo, file_path, s.github_spec_branch, new_content, message
     )
-    return result
 
 
 async def update_app_values(
     file_path: str,
     app_name: str,
-    values_files: list[str],
+    values_file: str,
 ) -> dict:
     """
     Update the helm.valuesFiles for a specific app in a specific file.
-    Returns commit info on success.
+    If the app doesn't exist in the file yet, creates a minimal override entry.
+    """
+    s = get_settings()
+    content = await get_file_content(s.github_spec_repo, file_path, s.github_spec_branch)
+    data = parse_yaml(content)
+
+    if app_name in data:
+        if "source" not in data[app_name]:
+            data[app_name]["source"] = {}
+        if "helm" not in data[app_name]["source"]:
+            data[app_name]["source"]["helm"] = {}
+        old_values = data[app_name]["source"]["helm"].get("valuesFiles", [])
+        data[app_name]["source"]["helm"]["valuesFiles"] = [values_file]
+    else:
+        old_values = "inherited"
+        data[app_name] = {"source": {"helm": {"valuesFiles": [values_file]}}}
+
+    new_content = yaml.dump(data, default_flow_style=False, sort_keys=False)
+    message = f"cloudlet-manager: update {app_name} valuesFiles from {old_values} to ['{values_file}'] in {file_path}"
+    return await update_file(
+        s.github_spec_repo, file_path, s.github_spec_branch, new_content, message
+    )
+
+
+async def inherit_field(
+    file_path: str,
+    app_name: str,
+    field: str,
+) -> dict:
+    """
+    Remove a field override from an app in a file so it inherits from the parent scope.
+    If no overrides remain for the app, removes the entire app entry.
     """
     s = get_settings()
     content = await get_file_content(s.github_spec_repo, file_path, s.github_spec_branch)
@@ -235,20 +354,31 @@ async def update_app_values(
     if app_name not in data:
         raise ValueError(f"App '{app_name}' not found in {file_path}")
 
-    if "source" not in data[app_name]:
-        raise ValueError(f"App '{app_name}' has no source in {file_path}")
+    removed_value = None
 
-    if "helm" not in data[app_name]["source"]:
-        data[app_name]["source"]["helm"] = {}
+    if field == "targetRevision":
+        source = data[app_name].get("source", {})
+        removed_value = source.pop("targetRevision", None)
+        if not source or source.keys() <= {"repoURL"}:
+            if "helm" not in source:
+                del data[app_name]
+    elif field == "valuesFiles":
+        helm = data[app_name].get("source", {}).get("helm", {})
+        removed_value = helm.pop("valuesFiles", None)
+        if not helm:
+            data[app_name].get("source", {}).pop("helm", None)
+        source = data[app_name].get("source", {})
+        if not source or source.keys() <= {"repoURL"}:
+            del data[app_name]
+    else:
+        raise ValueError(f"Unknown field: {field}")
 
-    old_values = data[app_name]["source"]["helm"].get("valuesFiles", [])
-    data[app_name]["source"]["helm"]["valuesFiles"] = values_files
+    if not data:
+        new_content = "# No overrides - inherits from parent scope\n"
+    else:
+        new_content = yaml.dump(data, default_flow_style=False, sort_keys=False)
 
-    import yaml
-    new_content = yaml.dump(data, default_flow_style=False, sort_keys=False)
-
-    message = f"cloudlet-manager: update {app_name} valuesFiles from {old_values} to {values_files} in {file_path}"
-    result = await update_file(
+    message = f"cloudlet-manager: inherit {field} for {app_name} from parent scope (removed '{removed_value}' from {file_path})"
+    return await update_file(
         s.github_spec_repo, file_path, s.github_spec_branch, new_content, message
     )
-    return result

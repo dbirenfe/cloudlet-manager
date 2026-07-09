@@ -137,6 +137,15 @@ export default function AppsPanel({ flavor, env, cluster }: AppsPanelProps) {
   const warningCount =
     data?.apps.filter((a) => a.branch_exists === false).length ?? 0;
 
+  let scopeFile = "_apps.yaml";
+  if (flavor && env && cluster) {
+    scopeFile = `${flavor}/${env}/${cluster}.yaml`;
+  } else if (flavor && env) {
+    scopeFile = `${flavor}/${env}/_apps.yaml`;
+  } else if (flavor) {
+    scopeFile = `${flavor}/_apps.yaml`;
+  }
+
   return (
     <div style={s.panel}>
       {breadcrumbParts.length > 0 && (
@@ -191,6 +200,7 @@ export default function AppsPanel({ flavor, env, cluster }: AppsPanelProps) {
                 <AppCard
                   key={`${app.name}-${app.defined_at}`}
                   app={app}
+                  scopeFile={scopeFile}
                   onUpdated={() => setRefreshKey((k) => k + 1)}
                 />
               ))}

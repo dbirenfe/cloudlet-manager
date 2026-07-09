@@ -9,11 +9,18 @@ from app.models import (
     BranchUpdateResponse,
     ValuesUpdateRequest,
     ValuesFileList,
+    InheritFieldRequest,
     UpdateResponse,
     RepoStructure,
     ScopeApps,
 )
-from app.spec_service import get_structure, get_apps_for_scope, update_app_branch, update_app_values
+from app.spec_service import (
+    get_structure,
+    get_apps_for_scope,
+    update_app_branch,
+    update_app_values,
+    inherit_field,
+)
 from app.github_client import list_branches, list_values_files
 
 
@@ -49,7 +56,6 @@ async def health():
 
 @app.get("/api/structure", response_model=RepoStructure)
 async def structure(user: dict = Depends(get_current_user)):
-    """Get the full repo structure: flavors, environments, and clusters."""
     return await get_structure()
 
 
@@ -60,10 +66,6 @@ async def apps(
     cluster: str | None = Query(None),
     user: dict = Depends(get_current_user),
 ):
-    """
-    Get resolved app configs for a scope.
-    Override chain: root -> flavor -> env -> cluster.
-    """
     return await get_apps_for_scope(flavor, env, cluster)
 
 
@@ -72,7 +74,6 @@ async def branches(
     repo_url: str = Query(..., description="Full GitHub repo URL"),
     user: dict = Depends(get_current_user),
 ):
-    """List all branches for a given app repo URL."""
     branch_list = await list_branches(repo_url)
     return BranchList(repo_url=repo_url, branches=branch_list)
 
@@ -82,7 +83,6 @@ async def update_branch(
     req: BranchUpdateRequest,
     user: dict = Depends(get_current_user),
 ):
-    """Update the targetRevision for an app in a specific YAML file."""
     try:
         result = await update_app_branch(req.file_path, req.app_name, req.new_branch)
         commit_url = result.get("commit", {}).get("html_url", "")
@@ -100,11 +100,10 @@ async def update_branch(
 
 @app.get("/api/values-files", response_model=ValuesFileList)
 async def values_files(
-    repo_url: str = Query(..., description="Full GitHub repo URL"),
-    branch: str = Query("main", description="Branch to list files from"),
+    repo_url: str = Query(...),
+    branch: str = Query("main"),
     user: dict = Depends(get_current_user),
 ):
-    """List YAML files in a repo that can be used as Helm values files."""
     files = await list_values_files(repo_url, branch)
     return ValuesFileList(repo_url=repo_url, branch=branch, files=files)
 
@@ -114,14 +113,34 @@ async def update_values(
     req: ValuesUpdateRequest,
     user: dict = Depends(get_current_user),
 ):
-    """Update the helm.valuesFiles for an app in a specific YAML file."""
     try:
-        result = await update_app_values(req.file_path, req.app_name, req.values_files)
+        result = await update_app_values(req.file_path, req.app_name, req.values_file)
         commit_url = result.get("commit", {}).get("html_url", "")
         username = user.get("preferred_username", "unknown")
         return UpdateResponse(
             success=True,
-            message=f"Values files updated by {username}",
+            message=f"Values file updated by {username}",
+            commit_url=commit_url,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update: {e}")
+
+
+@app.post("/api/inherit-field", response_model=UpdateResponse)
+async def inherit_field_endpoint(
+    req: InheritFieldRequest,
+    user: dict = Depends(get_current_user),
+):
+    """Remove a field override so it inherits from the parent scope."""
+    try:
+        result = await inherit_field(req.file_path, req.app_name, req.field)
+        commit_url = result.get("commit", {}).get("html_url", "")
+        username = user.get("preferred_username", "unknown")
+        return UpdateResponse(
+            success=True,
+            message=f"Now inheriting {req.field} from parent scope (by {username})",
             commit_url=commit_url,
         )
     except ValueError as e:
@@ -132,7 +151,6 @@ async def update_values(
 
 @app.get("/api/auth/config")
 async def auth_config():
-    """Return Keycloak OIDC config for the frontend."""
     s = get_settings()
     if not s.keycloak_url:
         return {"enabled": False}

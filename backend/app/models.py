@@ -1,6 +1,13 @@
 from pydantic import BaseModel
 
 
+class FieldInfo(BaseModel):
+    value: str
+    defined_at: str
+    is_local: bool
+    parent_value: str | None = None
+
+
 class AppSource(BaseModel):
     repoURL: str
     targetRevision: str
@@ -10,9 +17,11 @@ class AppSource(BaseModel):
 class AppConfig(BaseModel):
     name: str
     source: AppSource
-    defined_at: str  # file path where this config comes from
-    inherited_from: str | None = None  # file path of the broader definition being overridden
+    defined_at: str
+    inherited_from: str | None = None
     branch_exists: bool | None = None
+    branch_info: FieldInfo
+    values_info: FieldInfo
 
 
 class ClusterInfo(BaseModel):
@@ -23,8 +32,8 @@ class ClusterInfo(BaseModel):
 
 
 class ScopeApps(BaseModel):
-    scope: str  # e.g. "standard/dev/cluster-dev-01"
-    scope_type: str  # "root", "flavor", "env", "cluster"
+    scope: str
+    scope_type: str
     apps: list[AppConfig]
 
 
@@ -42,7 +51,13 @@ class BranchUpdateRequest(BaseModel):
 class ValuesUpdateRequest(BaseModel):
     file_path: str
     app_name: str
-    values_files: list[str]
+    values_file: str
+
+
+class InheritFieldRequest(BaseModel):
+    file_path: str
+    app_name: str
+    field: str  # "targetRevision" or "valuesFiles"
 
 
 class ValuesFileList(BaseModel):
@@ -65,5 +80,5 @@ class BranchUpdateResponse(BaseModel):
 
 class RepoStructure(BaseModel):
     flavors: list[str]
-    environments: dict[str, list[str]]  # flavor -> [envs]
-    clusters: dict[str, list[ClusterInfo]]  # "flavor/env" -> [clusters]
+    environments: dict[str, list[str]]
+    clusters: dict[str, list[ClusterInfo]]
