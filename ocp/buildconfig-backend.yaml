@@ -1,0 +1,31 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: cloudlet-backend
+  namespace: cloudlet-manager
+  labels:
+    app: cloudlet-backend
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/dbirenfe/cloudlet-manager.git
+    contextDir: backend
+    sourceSecret:
+      name: github-credentials
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: cloudlet-backend:latest
+  triggers:
+    - type: ConfigChange
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: cloudlet-backend
+  namespace: cloudlet-manager
