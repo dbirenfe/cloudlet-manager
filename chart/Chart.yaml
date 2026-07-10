@@ -1,8 +1,8 @@
 apiVersion: v2
 name: cloudlet-manager
 description: GitOps branch management dashboard for ArgoCD-managed clusters
-version: 1.0.0
-appVersion: "1.0.0"
+version: 2.0.0
+appVersion: "2.0.0"
 type: application
 keywords:
   - gitops

@@ -76,6 +76,8 @@ sso:
   # Users not in these groups will be denied access.
   allowedGroups:
     - "/cloudlet-admins"
+  # -- Skip TLS verification for Keycloak (only for self-signed certs)
+  skipTlsVerify: false
 
 # -- OpenShift Route configuration
 route:

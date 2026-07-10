@@ -1,45 +1,57 @@
+########################################################
+# Override values — copy this file and fill in your env
+########################################################
+
 namespace: cloudlet-manager
 
 backend:
   image:
-    repository: quay.io/dbirenfe/cloudlet-backend
-    tag: "1.3.1"
+    repository: ""   # e.g. registry.internal.example.com/cloudlet-manager/backend
+    tag: "2.0.0"
   replicas: 1
 
 frontend:
   image:
-    repository: quay.io/dbirenfe/cloudlet-frontend
-    tag: "1.3.2"
+    repository: ""   # e.g. registry.internal.example.com/cloudlet-manager/frontend
+    tag: "2.0.0"
   replicas: 1
 
 oauthProxy:
   image:
-    repository: quay.io/oauth2-proxy/oauth2-proxy
+    repository: ""   # e.g. registry.internal.example.com/oauth2-proxy/oauth2-proxy
     tag: "v7.7.1"
 
 git:
-  specRepo: "dbirenfe/cloudlets-spec"
+  specRepo: ""       # e.g. "myorg/cloudlets-spec"
   specBranch: "main"
-  apiUrl: "https://api.github.com"
+  apiUrl: ""         # e.g. "https://gitea.internal.example.com/api/v1"
 
 sso:
   enabled: true
-  keycloakUrl: "https://rhbk-rhbk.apps.cluster-nf2q4.dynamic2.redhatworkshops.io"
-  realm: "myrealm"
-  clientId: "cloudlet-manager"
+  keycloakUrl: ""    # e.g. "https://keycloak.apps.cluster.example.com"
+  realm: ""          # e.g. "myrealm"
+  clientId: ""       # e.g. "cloudlet-manager"
   allowedGroups:
     - "/cloudlet-admins"
+  skipTlsVerify: false
 
 route:
-  host: "cloudlet-manager-cloudlet-manager.apps.cluster-nf2q4.dynamic2.redhatworkshops.io"
+  host: ""           # e.g. "cloudlet-manager.apps.cluster.example.com"
   tls:
     termination: edge
     insecureEdgeTerminationPolicy: Redirect
 
-imagePullSecret: "quay-pull-secret"
+imagePullSecret: ""  # e.g. "registry-pull-secret"
 
 corsOrigins: '["*"]'
 branchCacheTtl: 300
 
 vault:
-  enabled: false
+  enabled: true
+  secretStoreName: "vault-backend"
+  secretStoreKind: "ClusterSecretStore"
+  refreshInterval: "1h"
+  paths:
+    gitToken: "secret/data/cloudlet-manager/git"
+    ssoClientSecret: "secret/data/cloudlet-manager/sso"
+    oauthCookieSecret: "secret/data/cloudlet-manager/oauth-proxy"

@@ -71,8 +71,10 @@ spec:
             - --cookie-expire=168h
             - --skip-provider-button=true
             - --code-challenge-method=S256
+            {{- if .Values.sso.skipTlsVerify }}
             - --ssl-insecure-skip-verify=true
             - --insecure-oidc-skip-issuer-verification=true
+            {{- end }}
             {{- range .Values.sso.allowedGroups }}
             - --allowed-group={{ . }}
             {{- end }}
