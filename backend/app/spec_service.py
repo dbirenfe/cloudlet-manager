@@ -325,6 +325,9 @@ async def update_app_values(
     content = await get_file_content(s.github_spec_repo, file_path, s.github_spec_branch)
     data = parse_yaml(content)
 
+    if not values_files:
+        return await inherit_field(file_path, app_name, "valuesFiles")
+
     if app_name in data:
         if "source" not in data[app_name]:
             data[app_name]["source"] = {}
@@ -561,15 +564,20 @@ async def preview_diff(
         else:
             data[app_name] = {"source": {"targetRevision": branch_value}}
 
-    if values_action == "inherit":
-        if app_name in data:
-            helm = data[app_name].get("source", {}).get("helm", {})
+    def _remove_values_from(d: dict) -> None:
+        if app_name in d:
+            helm = d[app_name].get("source", {}).get("helm", {})
             helm.pop("valuesFiles", None)
             if not helm:
-                data[app_name].get("source", {}).pop("helm", None)
+                d[app_name].get("source", {}).pop("helm", None)
+
+    if values_action == "inherit":
+        _remove_values_from(data)
     elif values_action == "set" and values_value is not None:
         values_list = [v.strip() for v in values_value.split(",") if v.strip()]
-        if app_name in data:
+        if not values_list:
+            _remove_values_from(data)
+        elif app_name in data:
             if "source" not in data[app_name]:
                 data[app_name]["source"] = {}
             if "helm" not in data[app_name]["source"]:

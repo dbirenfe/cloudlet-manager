@@ -3,7 +3,7 @@ namespace: cloudlet-manager
 backend:
   image:
     repository: quay.io/dbirenfe/cloudlet-backend
-    tag: "1.2.2"
+    tag: "1.2.3"
   replicas: 1
 
 frontend:
