@@ -419,21 +419,26 @@ async def search_all_apps(query: str, field: str = "branch") -> list[SearchResul
     yaml_paths = [
         item["path"]
         for item in tree
-        if item["type"] == "blob" and item["path"].endswith(".yaml")
+        if item["type"] == "blob" and item["path"].endswith(".yaml") and "/" in item["path"]
     ]
 
-    results: list[SearchResult] = []
+    file_contents = await asyncio.gather(
+        *[_load_apps_file(p) for p in yaml_paths],
+        return_exceptions=True,
+    )
 
-    for path in yaml_paths:
-        parts = path.split("/")
-        if len(parts) < 2:
+    results: list[SearchResult] = []
+    missing_checks: list[tuple[str, str, str, str, str, str]] = []
+
+    for path, raw in zip(yaml_paths, file_contents):
+        if isinstance(raw, Exception) or not isinstance(raw, dict):
             continue
 
+        parts = path.split("/")
         flavor = parts[0]
         env = parts[1] if len(parts) >= 3 else ""
         cluster = parts[2].replace(".yaml", "") if len(parts) == 3 else ""
 
-        raw = await _load_apps_file(path)
         for app_name, app_data in raw.items():
             if not isinstance(app_data, dict):
                 continue
@@ -442,23 +447,11 @@ async def search_all_apps(query: str, field: str = "branch") -> list[SearchResul
                 repo_url = _extract_repo_url(app_data)
                 tr = _extract_target_revision(app_data)
                 if repo_url and tr:
-                    exists = await branch_exists(repo_url, tr)
-                    if not exists:
-                        results.append(
-                            SearchResult(
-                                app_name=app_name,
-                                field_matched="branch_exists",
-                                value=tr,
-                                file_path=path,
-                                flavor=flavor,
-                                env=env,
-                                cluster=cluster,
-                            )
-                        )
+                    missing_checks.append((app_name, tr, repo_url, path, flavor, env, cluster))
                 continue
 
             tr = _extract_target_revision(app_data)
-            if tr and query in tr:
+            if tr and query.lower() in tr.lower():
                 results.append(
                     SearchResult(
                         app_name=app_name,
@@ -474,7 +467,7 @@ async def search_all_apps(query: str, field: str = "branch") -> list[SearchResul
             vf = _extract_values_files(app_data)
             if vf:
                 for v in vf:
-                    if query in v:
+                    if query.lower() in v.lower():
                         results.append(
                             SearchResult(
                                 app_name=app_name,
@@ -487,6 +480,25 @@ async def search_all_apps(query: str, field: str = "branch") -> list[SearchResul
                             )
                         )
                         break
+
+    if missing_checks:
+        exists_results = await asyncio.gather(
+            *[branch_exists(mc[2], mc[1]) for mc in missing_checks],
+            return_exceptions=True,
+        )
+        for (app_name, tr, _, path, flavor, env, cluster), exists in zip(missing_checks, exists_results):
+            if isinstance(exists, bool) and not exists:
+                results.append(
+                    SearchResult(
+                        app_name=app_name,
+                        field_matched="branch_exists",
+                        value=tr,
+                        file_path=path,
+                        flavor=flavor,
+                        env=env,
+                        cluster=cluster,
+                    )
+                )
 
     return results
 

@@ -302,7 +302,7 @@ export default function Header({ activeView, onViewChange, onSearchNavigate }: H
           </div>
           <input
             style={styles.searchInput}
-            placeholder="Search apps, branches, values..."
+            placeholder={searching ? "Searching..." : "Search apps, branches, values..."}
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -313,6 +313,19 @@ export default function Header({ activeView, onViewChange, onSearchNavigate }: H
               if (results.length > 0 || searchError) setShowDropdown(true);
             }}
           />
+          {searching && (
+            <div style={{
+              position: "absolute" as const,
+              right: 12,
+              top: "50%",
+              transform: "translateY(-50%)",
+              fontSize: 11,
+              color: "var(--accent)",
+              fontWeight: 500,
+            }}>
+              Loading...
+            </div>
+          )}
 
           {showDropdown && (
             <div style={styles.dropdown}>
