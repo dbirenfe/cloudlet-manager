@@ -57,18 +57,28 @@ async def get_file_sha(repo: str, path: str, branch: str) -> str:
     return data["sha"]
 
 
-async def update_file(repo: str, path: str, branch: str, content: str, message: str) -> dict:
-    """Update a file in the repo via the GitHub API."""
+async def update_file(repo: str, path: str, branch: str, content: str, message: str, retries: int = 3) -> dict:
+    """Update a file in the repo via the GitHub API. Retries on 409 SHA conflict."""
+    import asyncio
     s = get_settings()
-    sha = await get_file_sha(repo, path, branch)
     url = f"{s.github_api_url}/repos/{repo}/contents/{path}"
-    body = {
-        "message": message,
-        "content": base64.b64encode(content.encode("utf-8")).decode("utf-8"),
-        "sha": sha,
-        "branch": branch,
-    }
-    return await _put(url, body)
+    encoded = base64.b64encode(content.encode("utf-8")).decode("utf-8")
+
+    for attempt in range(retries):
+        sha = await get_file_sha(repo, path, branch)
+        body = {
+            "message": message,
+            "content": encoded,
+            "sha": sha,
+            "branch": branch,
+        }
+        try:
+            return await _put(url, body)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 409 and attempt < retries - 1:
+                await asyncio.sleep(0.5 * (attempt + 1))
+                continue
+            raise
 
 
 async def list_branches(repo_url: str) -> list[str]:
