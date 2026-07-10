@@ -23,7 +23,12 @@ git:
   apiUrl: "https://api.github.com"
 
 sso:
-  enabled: false
+  enabled: true
+  keycloakUrl: "https://rhbk-rhbk.apps.cluster-nf2q4.dynamic2.redhatworkshops.io"
+  realm: "myrealm"
+  clientId: "cloudlet-manager"
+  allowedGroups:
+    - "/cloudlet-admins"
 
 route:
   host: "cloudlet-manager-cloudlet-manager.apps.cluster-nf2q4.dynamic2.redhatworkshops.io"
@@ -31,10 +36,10 @@ route:
     termination: edge
     insecureEdgeTerminationPolicy: Redirect
 
+imagePullSecret: "quay-pull-secret"
+
 corsOrigins: '["*"]'
 branchCacheTtl: 300
-
-imagePullSecret: "quay-pull-secret"
 
 vault:
   enabled: false
