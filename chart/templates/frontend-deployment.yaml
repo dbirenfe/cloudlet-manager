@@ -67,6 +67,8 @@ spec:
             - --cookie-httponly=true
             - --cookie-samesite=lax
             - --cookie-name=_cloudlet_oauth2
+            - --cookie-refresh=3m
+            - --cookie-expire=168h
             - --skip-provider-button=true
             - --code-challenge-method=S256
             - --ssl-insecure-skip-verify=true
