@@ -439,6 +439,8 @@ async def search_all_apps(query: str, field: str = "branch") -> list[SearchResul
         env = parts[1] if len(parts) >= 3 else ""
         cluster = parts[2].replace(".yaml", "") if len(parts) == 3 else ""
 
+        q = query.lower()
+
         for app_name, app_data in raw.items():
             if not isinstance(app_data, dict):
                 continue
@@ -447,10 +449,9 @@ async def search_all_apps(query: str, field: str = "branch") -> list[SearchResul
                 repo_url = _extract_repo_url(app_data)
                 tr = _extract_target_revision(app_data)
                 if repo_url and tr:
-                    missing_checks.append((app_name, tr, repo_url, path, flavor, env, cluster))
+                    if not q or q in app_name.lower() or q in tr.lower() or q in path.lower() or q in flavor.lower() or q in env.lower() or q in cluster.lower():
+                        missing_checks.append((app_name, tr, repo_url, path, flavor, env, cluster))
                 continue
-
-            q = query.lower()
 
             if field == "branch":
                 tr = _extract_target_revision(app_data)
