@@ -537,25 +537,48 @@ async def preview_diff(
     before = content
     data = parse_yaml(content)
 
+    is_inherit = not value.strip()
+
     if field == "targetRevision":
-        if app_name in data:
-            if "source" not in data[app_name]:
-                data[app_name]["source"] = {}
-            data[app_name]["source"]["targetRevision"] = value
+        if is_inherit:
+            if app_name in data:
+                source = data[app_name].get("source", {})
+                source.pop("targetRevision", None)
+                if not source or source.keys() <= {"repoURL"}:
+                    if "helm" not in source:
+                        del data[app_name]
         else:
-            data[app_name] = {"source": {"targetRevision": value}}
+            if app_name in data:
+                if "source" not in data[app_name]:
+                    data[app_name]["source"] = {}
+                data[app_name]["source"]["targetRevision"] = value
+            else:
+                data[app_name] = {"source": {"targetRevision": value}}
     elif field == "valuesFiles":
-        values_list = [v.strip() for v in value.split(",") if v.strip()]
-        if app_name in data:
-            if "source" not in data[app_name]:
-                data[app_name]["source"] = {}
-            if "helm" not in data[app_name]["source"]:
-                data[app_name]["source"]["helm"] = {}
-            data[app_name]["source"]["helm"]["valuesFiles"] = values_list
+        if is_inherit:
+            if app_name in data:
+                helm = data[app_name].get("source", {}).get("helm", {})
+                helm.pop("valuesFiles", None)
+                if not helm:
+                    data[app_name].get("source", {}).pop("helm", None)
+                source = data[app_name].get("source", {})
+                if not source or source.keys() <= {"repoURL"}:
+                    del data[app_name]
         else:
-            data[app_name] = {"source": {"helm": {"valuesFiles": values_list}}}
+            values_list = [v.strip() for v in value.split(",") if v.strip()]
+            if app_name in data:
+                if "source" not in data[app_name]:
+                    data[app_name]["source"] = {}
+                if "helm" not in data[app_name]["source"]:
+                    data[app_name]["source"]["helm"] = {}
+                data[app_name]["source"]["helm"]["valuesFiles"] = values_list
+            else:
+                data[app_name] = {"source": {"helm": {"valuesFiles": values_list}}}
     else:
         raise ValueError(f"Unsupported field: {field}")
 
-    after = yaml.dump(data, default_flow_style=False, sort_keys=False)
+    if not data:
+        after = "# No overrides - inherits from parent scope\n"
+    else:
+        after = yaml.dump(data, default_flow_style=False, sort_keys=False)
     return before, after
