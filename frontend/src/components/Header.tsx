@@ -210,6 +210,21 @@ export default function Header({ activeView, onViewChange, onSearchNavigate }: H
   const [missingLoaded, setMissingLoaded] = useState(false);
   const missingRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingMissing(true);
+    searchApps("", "missing")
+      .then((data) => {
+        if (!cancelled) {
+          setMissingResults(data.results);
+          setMissingLoaded(true);
+        }
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoadingMissing(false); });
+    return () => { cancelled = true; };
+  }, []);
+
   const doSearch = useCallback(
     async (q: string, f: SearchField) => {
       if (!q.trim()) {
@@ -273,22 +288,8 @@ export default function Header({ activeView, onViewChange, onSearchNavigate }: H
     onSearchNavigate?.(result.flavor, result.env, result.cluster);
   };
 
-  const loadMissing = async () => {
-    if (missingLoaded) {
-      setShowMissing((v) => !v);
-      return;
-    }
-    setShowMissing(true);
-    setLoadingMissing(true);
-    try {
-      const data = await searchApps("", "missing");
-      setMissingResults(data.results);
-      setMissingLoaded(true);
-    } catch {
-      setMissingResults([]);
-    } finally {
-      setLoadingMissing(false);
-    }
+  const loadMissing = () => {
+    setShowMissing((v) => !v);
   };
 
   useEffect(() => {
