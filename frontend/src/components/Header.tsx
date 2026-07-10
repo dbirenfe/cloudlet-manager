@@ -183,7 +183,6 @@ const styles: Record<string, CSSProperties> = {
 const FIELD_OPTIONS: { key: SearchField; label: string }[] = [
   { key: "branch", label: "Branch" },
   { key: "values", label: "Values" },
-  { key: "missing", label: "Missing" },
 ];
 
 function SearchIcon() {
@@ -204,6 +203,12 @@ export default function Header({ activeView, onViewChange, onSearchNavigate }: H
   const [searchError, setSearchError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const wrapRef = useRef<HTMLDivElement>(null);
+
+  const [missingResults, setMissingResults] = useState<SearchResult[]>([]);
+  const [showMissing, setShowMissing] = useState(false);
+  const [loadingMissing, setLoadingMissing] = useState(false);
+  const [missingLoaded, setMissingLoaded] = useState(false);
+  const missingRef = useRef<HTMLDivElement>(null);
 
   const doSearch = useCallback(
     async (q: string, f: SearchField) => {
@@ -264,8 +269,37 @@ export default function Header({ activeView, onViewChange, onSearchNavigate }: H
 
   const handleResultClick = (result: SearchResult) => {
     setShowDropdown(false);
+    setShowMissing(false);
     onSearchNavigate?.(result.flavor, result.env, result.cluster);
   };
+
+  const loadMissing = async () => {
+    if (missingLoaded) {
+      setShowMissing((v) => !v);
+      return;
+    }
+    setShowMissing(true);
+    setLoadingMissing(true);
+    try {
+      const data = await searchApps("", "missing");
+      setMissingResults(data.results);
+      setMissingLoaded(true);
+    } catch {
+      setMissingResults([]);
+    } finally {
+      setLoadingMissing(false);
+    }
+  };
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (missingRef.current && !missingRef.current.contains(e.target as Node)) {
+        setShowMissing(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   return (
     <header style={styles.header}>
@@ -295,7 +329,7 @@ export default function Header({ activeView, onViewChange, onSearchNavigate }: H
         </div>
       </div>
 
-      <div style={styles.center} ref={wrapRef}>
+      <div style={{ ...styles.center, gap: 12 }} ref={wrapRef}>
         <div style={styles.searchWrap}>
           <div style={styles.searchIcon}>
             <SearchIcon />
@@ -384,6 +418,122 @@ export default function Header({ activeView, onViewChange, onSearchNavigate }: H
                     </span>
                   </div>
                 ))}
+            </div>
+          )}
+        </div>
+
+        <div ref={missingRef} style={{ position: "relative" }}>
+          <button
+            onClick={loadMissing}
+            title="Missing branches"
+            style={{
+              background: showMissing ? "var(--warning-bg)" : "var(--bg-input)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius)",
+              padding: "7px 10px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              color: missingResults.length > 0 ? "var(--warning)" : "var(--text-muted)",
+              fontSize: 12,
+              fontWeight: 500,
+              transition: "all 0.15s",
+              whiteSpace: "nowrap" as const,
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path d="M8 1.5C5.5 1.5 4 3.5 4 5.5V9L2.5 11.5H13.5L12 9V5.5C12 3.5 10.5 1.5 8 1.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+              <path d="M6.5 12.5C6.5 13.3 7.2 14 8 14C8.8 14 9.5 13.3 9.5 12.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+            {missingLoaded && missingResults.length > 0 && (
+              <span style={{
+                background: "var(--warning)",
+                color: "#000",
+                borderRadius: 10,
+                padding: "0 6px",
+                fontSize: 10,
+                fontWeight: 700,
+                lineHeight: "16px",
+              }}>
+                {missingResults.length}
+              </span>
+            )}
+            {!missingLoaded && "Alerts"}
+          </button>
+
+          {showMissing && (
+            <div style={{
+              position: "absolute" as const,
+              top: "calc(100% + 8px)",
+              right: 0,
+              width: 380,
+              maxHeight: 350,
+              overflowY: "auto" as const,
+              background: "var(--bg-secondary)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius-lg)",
+              boxShadow: "var(--shadow)",
+              zIndex: 200,
+              padding: 8,
+            }}>
+              <div style={{
+                fontSize: 11,
+                fontWeight: 700,
+                textTransform: "uppercase" as const,
+                letterSpacing: "0.08em",
+                color: "var(--text-muted)",
+                padding: "8px 10px 6px",
+              }}>
+                Missing Branches ({loadingMissing ? "..." : missingResults.length})
+              </div>
+
+              {loadingMissing && (
+                <div style={{ padding: "12px 10px", color: "var(--text-muted)", fontSize: 12 }}>
+                  Checking branches...
+                </div>
+              )}
+
+              {!loadingMissing && missingResults.length === 0 && (
+                <div style={{ padding: "12px 10px", color: "var(--success)", fontSize: 12 }}>
+                  All branches are valid
+                </div>
+              )}
+
+              {!loadingMissing && missingResults.map((r, i) => (
+                <div
+                  key={`${r.file_path}-${r.app_name}-${i}`}
+                  onClick={() => handleResultClick(r)}
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    transition: "background 0.1s",
+                    borderBottom: "1px solid var(--border)",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>
+                      {r.app_name}
+                    </span>
+                    <span style={{
+                      fontSize: 10,
+                      fontWeight: 600,
+                      color: "var(--warning)",
+                      background: "var(--warning-bg)",
+                      padding: "1px 6px",
+                      borderRadius: 4,
+                    }}>
+                      {r.value}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                    {r.flavor}/{r.env}/{r.cluster}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
