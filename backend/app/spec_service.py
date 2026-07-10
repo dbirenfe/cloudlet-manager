@@ -529,53 +529,55 @@ async def bulk_update(
 async def preview_diff(
     file_path: str,
     app_name: str,
-    field: str,
-    value: str,
+    branch_action: str | None = None,
+    branch_value: str | None = None,
+    values_action: str | None = None,
+    values_value: str | None = None,
 ) -> tuple[str, str]:
+    """
+    Preview the file as it would look after applying changes.
+    action: "set" to write a value, "inherit" to remove the field.
+    None means no change for that field.
+    """
     s = get_settings()
     content = await get_file_content(s.github_spec_repo, file_path, s.github_spec_branch)
     before = content
     data = parse_yaml(content)
 
-    is_inherit = not value.strip()
+    if branch_action == "inherit":
+        if app_name in data:
+            source = data[app_name].get("source", {})
+            source.pop("targetRevision", None)
+    elif branch_action == "set" and branch_value is not None:
+        if app_name in data:
+            if "source" not in data[app_name]:
+                data[app_name]["source"] = {}
+            data[app_name]["source"]["targetRevision"] = branch_value
+        else:
+            data[app_name] = {"source": {"targetRevision": branch_value}}
 
-    if field == "targetRevision":
-        if is_inherit:
-            if app_name in data:
-                source = data[app_name].get("source", {})
-                source.pop("targetRevision", None)
-                if not source or source.keys() <= {"repoURL"}:
-                    if "helm" not in source:
-                        del data[app_name]
+    if values_action == "inherit":
+        if app_name in data:
+            helm = data[app_name].get("source", {}).get("helm", {})
+            helm.pop("valuesFiles", None)
+            if not helm:
+                data[app_name].get("source", {}).pop("helm", None)
+    elif values_action == "set" and values_value is not None:
+        values_list = [v.strip() for v in values_value.split(",") if v.strip()]
+        if app_name in data:
+            if "source" not in data[app_name]:
+                data[app_name]["source"] = {}
+            if "helm" not in data[app_name]["source"]:
+                data[app_name]["source"]["helm"] = {}
+            data[app_name]["source"]["helm"]["valuesFiles"] = values_list
         else:
-            if app_name in data:
-                if "source" not in data[app_name]:
-                    data[app_name]["source"] = {}
-                data[app_name]["source"]["targetRevision"] = value
-            else:
-                data[app_name] = {"source": {"targetRevision": value}}
-    elif field == "valuesFiles":
-        if is_inherit:
-            if app_name in data:
-                helm = data[app_name].get("source", {}).get("helm", {})
-                helm.pop("valuesFiles", None)
-                if not helm:
-                    data[app_name].get("source", {}).pop("helm", None)
-                source = data[app_name].get("source", {})
-                if not source or source.keys() <= {"repoURL"}:
-                    del data[app_name]
-        else:
-            values_list = [v.strip() for v in value.split(",") if v.strip()]
-            if app_name in data:
-                if "source" not in data[app_name]:
-                    data[app_name]["source"] = {}
-                if "helm" not in data[app_name]["source"]:
-                    data[app_name]["source"]["helm"] = {}
-                data[app_name]["source"]["helm"]["valuesFiles"] = values_list
-            else:
-                data[app_name] = {"source": {"helm": {"valuesFiles": values_list}}}
-    else:
-        raise ValueError(f"Unsupported field: {field}")
+            data[app_name] = {"source": {"helm": {"valuesFiles": values_list}}}
+
+    if app_name in data:
+        source = data[app_name].get("source", {})
+        if not source or source.keys() <= {"repoURL"}:
+            if "helm" not in source:
+                del data[app_name]
 
     if not data:
         after = "# No overrides - inherits from parent scope\n"

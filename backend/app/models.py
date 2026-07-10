@@ -145,8 +145,10 @@ class BulkUpdateResponse(BaseModel):
 class DiffPreviewRequest(BaseModel):
     file_path: str
     app_name: str
-    field: str
-    value: str
+    branch_action: str | None = None
+    branch_value: str | None = None
+    values_action: str | None = None
+    values_value: str | None = None
 
 
 class DiffPreviewResponse(BaseModel):

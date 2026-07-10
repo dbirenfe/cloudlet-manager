@@ -424,30 +424,29 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
     setLoadingDiff(true);
     setDiffError(null);
     try {
-      let before = "";
-      let after = "";
+      const opts: Parameters<typeof previewDiff>[2] = {};
 
       if (isBranchChanged) {
-        const branchValue = selectedBranch === INHERIT_VALUE ? "" : selectedBranch;
-        const data = await previewDiff(scopeFile, app.name, "targetRevision", branchValue);
-        before = data.before;
-        after = data.after;
-      }
-
-      if (isValuesChanged) {
-        const valuesValue = valuesInherit ? "" : editedValues.join(",");
-        const data = await previewDiff(scopeFile, app.name, "valuesFiles", valuesValue);
-        if (!before) {
-          before = data.before;
-          after = data.after;
+        if (selectedBranch === INHERIT_VALUE) {
+          opts.branchAction = "inherit";
         } else {
-          before += "\n--- Values change ---\n" + data.before;
-          after += "\n--- Values change ---\n" + data.after;
+          opts.branchAction = "set";
+          opts.branchValue = selectedBranch;
         }
       }
 
-      setDiffBefore(before);
-      setDiffAfter(after);
+      if (isValuesChanged) {
+        if (valuesInherit) {
+          opts.valuesAction = "inherit";
+        } else {
+          opts.valuesAction = "set";
+          opts.valuesValue = editedValues.join(",");
+        }
+      }
+
+      const data = await previewDiff(scopeFile, app.name, opts);
+      setDiffBefore(data.before);
+      setDiffAfter(data.after);
       setShowDiff(true);
     } catch (e) {
       setDiffError(e instanceof Error ? e.message : "Preview failed");

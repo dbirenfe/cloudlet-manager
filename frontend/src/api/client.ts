@@ -242,16 +242,22 @@ export interface DiffPreviewResponse {
 export async function previewDiff(
   filePath: string,
   appName: string,
-  field: string,
-  value: string
+  opts: {
+    branchAction?: "set" | "inherit";
+    branchValue?: string;
+    valuesAction?: "set" | "inherit";
+    valuesValue?: string;
+  }
 ): Promise<DiffPreviewResponse> {
   return request<DiffPreviewResponse>("/api/preview-diff", {
     method: "POST",
     body: JSON.stringify({
       file_path: filePath,
       app_name: appName,
-      field,
-      value,
+      branch_action: opts.branchAction ?? null,
+      branch_value: opts.branchValue ?? null,
+      values_action: opts.valuesAction ?? null,
+      values_value: opts.valuesValue ?? null,
     }),
   });
 }

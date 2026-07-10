@@ -197,7 +197,11 @@ async def preview_diff_endpoint(
     user: dict = Depends(get_current_user),
 ):
     try:
-        before, after = await preview_diff(req.file_path, req.app_name, req.field, req.value)
+        before, after = await preview_diff(
+            req.file_path, req.app_name,
+            branch_action=req.branch_action, branch_value=req.branch_value,
+            values_action=req.values_action, values_value=req.values_value,
+        )
         return DiffPreviewResponse(before=before, after=after)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
