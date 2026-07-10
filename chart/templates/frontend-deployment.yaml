@@ -58,15 +58,19 @@ spec:
             - --oidc-issuer-url={{ .Values.sso.keycloakUrl }}/realms/{{ .Values.sso.realm }}
             - --client-id={{ .Values.sso.clientId }}
             - --email-domain=*
+            - --scope=openid email profile
             - --pass-authorization-header=true
             - --pass-access-token=true
             - --set-authorization-header=true
+            - --set-xauthrequest=true
             - --cookie-secure=true
             - --cookie-httponly=true
             - --cookie-samesite=lax
             - --cookie-name=_cloudlet_oauth2
             - --skip-provider-button=true
             - --code-challenge-method=S256
+            - --ssl-insecure-skip-verify=true
+            - --insecure-oidc-skip-issuer-verification=true
             {{- range .Values.sso.allowedGroups }}
             - --allowed-group={{ . }}
             {{- end }}
