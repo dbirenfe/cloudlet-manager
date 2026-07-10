@@ -58,7 +58,10 @@ async def get_current_user(
             key,
             algorithms=["RS256"],
             audience=s.keycloak_client_id,
-            options={"verify_aud": bool(s.keycloak_client_id)},
+            options={
+                "verify_aud": bool(s.keycloak_client_id),
+                "verify_at_hash": False,
+            },
         )
     except JWTError as e:
         raise HTTPException(status_code=401, detail=f"Token validation failed: {e}")
