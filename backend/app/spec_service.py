@@ -10,6 +10,7 @@ from app.github_client import (
     list_branches,
     list_values_files,
     branch_exists,
+    get_commits,
     parse_yaml,
 )
 from app.models import (
@@ -20,6 +21,9 @@ from app.models import (
     ValuesFieldInfo,
     RepoStructure,
     ScopeApps,
+    AuditEntry,
+    SearchResult,
+    BulkTargetResult,
 )
 
 APPS_FILENAME = "_apps.yaml"
@@ -383,3 +387,175 @@ async def inherit_field(
     return await update_file(
         s.github_spec_repo, file_path, s.github_spec_branch, new_content, message
     )
+
+
+async def get_audit_log(limit: int = 50) -> list[AuditEntry]:
+    s = get_settings()
+    commits = await get_commits(s.github_spec_repo, s.github_spec_branch, limit)
+    entries: list[AuditEntry] = []
+    for c in commits:
+        commit_data = c.get("commit", {})
+        author_data = commit_data.get("author", {})
+        files = [f["filename"] for f in c.get("files", [])]
+        entries.append(
+            AuditEntry(
+                timestamp=author_data.get("date", ""),
+                author=author_data.get("name", "unknown"),
+                message=commit_data.get("message", ""),
+                sha=c.get("sha", ""),
+                files_changed=files,
+            )
+        )
+    return entries
+
+
+async def search_all_apps(query: str, field: str = "branch") -> list[SearchResult]:
+    s = get_settings()
+    tree = await get_repo_tree(s.github_spec_repo, s.github_spec_branch)
+
+    yaml_paths = [
+        item["path"]
+        for item in tree
+        if item["type"] == "blob" and item["path"].endswith(".yaml")
+    ]
+
+    results: list[SearchResult] = []
+
+    for path in yaml_paths:
+        parts = path.split("/")
+        if len(parts) < 2:
+            continue
+
+        flavor = parts[0]
+        env = parts[1] if len(parts) >= 3 else ""
+        cluster = parts[2].replace(".yaml", "") if len(parts) == 3 else ""
+
+        raw = await _load_apps_file(path)
+        for app_name, app_data in raw.items():
+            if not isinstance(app_data, dict):
+                continue
+
+            if field == "missing":
+                repo_url = _extract_repo_url(app_data)
+                tr = _extract_target_revision(app_data)
+                if repo_url and tr:
+                    exists = await branch_exists(repo_url, tr)
+                    if not exists:
+                        results.append(
+                            SearchResult(
+                                app_name=app_name,
+                                field_matched="branch_exists",
+                                value=tr,
+                                file_path=path,
+                                flavor=flavor,
+                                env=env,
+                                cluster=cluster,
+                            )
+                        )
+                continue
+
+            tr = _extract_target_revision(app_data)
+            if tr and query in tr:
+                results.append(
+                    SearchResult(
+                        app_name=app_name,
+                        field_matched="targetRevision",
+                        value=tr,
+                        file_path=path,
+                        flavor=flavor,
+                        env=env,
+                        cluster=cluster,
+                    )
+                )
+
+            vf = _extract_values_files(app_data)
+            if vf:
+                for v in vf:
+                    if query in v:
+                        results.append(
+                            SearchResult(
+                                app_name=app_name,
+                                field_matched="valuesFiles",
+                                value=v,
+                                file_path=path,
+                                flavor=flavor,
+                                env=env,
+                                cluster=cluster,
+                            )
+                        )
+                        break
+
+    return results
+
+
+async def bulk_update(
+    targets: list[dict],
+    field: str,
+    value: str,
+) -> list[BulkTargetResult]:
+    results: list[BulkTargetResult] = []
+    for target in targets:
+        file_path = target["file_path"]
+        app_name = target["app_name"]
+        try:
+            if field == "targetRevision":
+                result = await update_app_branch(file_path, app_name, value)
+            elif field == "valuesFiles":
+                result = await update_app_values(file_path, app_name, [value])
+            else:
+                raise ValueError(f"Unsupported field: {field}")
+            commit_url = result.get("commit", {}).get("html_url", "")
+            results.append(
+                BulkTargetResult(
+                    file_path=file_path,
+                    app_name=app_name,
+                    success=True,
+                    message="Updated successfully",
+                    commit_url=commit_url,
+                )
+            )
+        except Exception as e:
+            results.append(
+                BulkTargetResult(
+                    file_path=file_path,
+                    app_name=app_name,
+                    success=False,
+                    message=str(e),
+                )
+            )
+    return results
+
+
+async def preview_diff(
+    file_path: str,
+    app_name: str,
+    field: str,
+    value: str,
+) -> tuple[str, str]:
+    s = get_settings()
+    content = await get_file_content(s.github_spec_repo, file_path, s.github_spec_branch)
+    before = content
+    data = parse_yaml(content)
+
+    if field == "targetRevision":
+        if app_name in data:
+            if "source" not in data[app_name]:
+                data[app_name]["source"] = {}
+            data[app_name]["source"]["targetRevision"] = value
+        else:
+            data[app_name] = {"source": {"targetRevision": value}}
+    elif field == "valuesFiles":
+        values_list = [v.strip() for v in value.split(",") if v.strip()]
+        if app_name in data:
+            if "source" not in data[app_name]:
+                data[app_name]["source"] = {}
+            if "helm" not in data[app_name]["source"]:
+                data[app_name]["source"]["helm"] = {}
+            data[app_name]["source"]["helm"]["valuesFiles"] = values_list
+        else:
+            data[app_name] = {"source": {"helm": {"valuesFiles": values_list}}}
+    else:
+        raise ValueError(f"Unsupported field: {field}")
+
+    after = yaml.dump(data, default_flow_style=False, sort_keys=False)
+    return before, after

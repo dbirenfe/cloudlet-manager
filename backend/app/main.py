@@ -13,6 +13,12 @@ from app.models import (
     UpdateResponse,
     RepoStructure,
     ScopeApps,
+    AuditLog,
+    SearchResponse,
+    BulkUpdateRequest,
+    BulkUpdateResponse,
+    DiffPreviewRequest,
+    DiffPreviewResponse,
 )
 from app.spec_service import (
     get_structure,
@@ -20,6 +26,10 @@ from app.spec_service import (
     update_app_branch,
     update_app_values,
     inherit_field,
+    get_audit_log,
+    search_all_apps,
+    bulk_update,
+    preview_diff,
 )
 from app.github_client import list_branches, list_values_files
 
@@ -147,6 +157,52 @@ async def inherit_field_endpoint(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update: {e}")
+
+
+@app.get("/api/audit", response_model=AuditLog)
+async def audit(
+    limit: int = Query(50, ge=1, le=100),
+    user: dict = Depends(get_current_user),
+):
+    entries = await get_audit_log(limit)
+    return AuditLog(entries=entries)
+
+
+@app.get("/api/search", response_model=SearchResponse)
+async def search(
+    query: str = Query("", description="Substring to match"),
+    field: str = Query("branch", description="Field to search: branch, values, or missing"),
+    user: dict = Depends(get_current_user),
+):
+    results = await search_all_apps(query, field)
+    return SearchResponse(query=query, field=field, results=results)
+
+
+@app.post("/api/bulk-update", response_model=BulkUpdateResponse)
+async def bulk_update_endpoint(
+    req: BulkUpdateRequest,
+    user: dict = Depends(get_current_user),
+):
+    try:
+        targets = [{"file_path": t.file_path, "app_name": t.app_name} for t in req.targets]
+        results = await bulk_update(targets, req.field, req.value)
+        return BulkUpdateResponse(results=results)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Bulk update failed: {e}")
+
+
+@app.post("/api/preview-diff", response_model=DiffPreviewResponse)
+async def preview_diff_endpoint(
+    req: DiffPreviewRequest,
+    user: dict = Depends(get_current_user),
+):
+    try:
+        before, after = await preview_diff(req.file_path, req.app_name, req.field, req.value)
+        return DiffPreviewResponse(before=before, after=after)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate diff: {e}")
 
 
 @app.get("/api/auth/config")

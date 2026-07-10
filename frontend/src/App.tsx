@@ -1,9 +1,28 @@
-import { useEffect, useState } from "react";
+import { type CSSProperties, useEffect, useState } from "react";
 import Header from "./components/Header";
 import Sidebar from "./components/Sidebar";
 import AppsPanel from "./components/AppsPanel";
+import AuditPanel from "./components/AuditPanel";
+import BulkUpdatePanel from "./components/BulkUpdatePanel";
 import type { RepoStructure } from "./api/client";
 import { fetchStructure } from "./api/client";
+
+const bulkBtnStyle: CSSProperties = {
+  position: "fixed",
+  bottom: 24,
+  right: 24,
+  padding: "10px 20px",
+  background: "var(--accent)",
+  color: "#fff",
+  border: "none",
+  borderRadius: "var(--radius-lg)",
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: "pointer",
+  boxShadow: "var(--shadow)",
+  zIndex: 50,
+  transition: "background 0.15s",
+};
 
 export default function App() {
   const [structure, setStructure] = useState<RepoStructure | null>(null);
@@ -11,6 +30,8 @@ export default function App() {
   const [selectedEnv, setSelectedEnv] = useState<string | null>(null);
   const [selectedCluster, setSelectedCluster] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<"clusters" | "audit">("clusters");
+  const [showBulk, setShowBulk] = useState(false);
 
   useEffect(() => {
     fetchStructure()
@@ -26,20 +47,27 @@ export default function App() {
     setSelectedFlavor(flavor);
     setSelectedEnv(env);
     setSelectedCluster(cluster);
+    setActiveView("clusters");
   };
 
   return (
     <>
-      <Header />
+      <Header
+        activeView={activeView}
+        onViewChange={setActiveView}
+        onSearchNavigate={handleSelect}
+      />
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        <Sidebar
-          structure={structure}
-          selectedFlavor={selectedFlavor}
-          selectedEnv={selectedEnv}
-          selectedCluster={selectedCluster}
-          onSelect={handleSelect}
-        />
-        {error ? (
+        {activeView === "clusters" && (
+          <Sidebar
+            structure={structure}
+            selectedFlavor={selectedFlavor}
+            selectedEnv={selectedEnv}
+            selectedCluster={selectedCluster}
+            onSelect={handleSelect}
+          />
+        )}
+        {error && activeView === "clusters" ? (
           <div
             style={{
               flex: 1,
@@ -53,6 +81,8 @@ export default function App() {
           >
             Failed to load: {error}
           </div>
+        ) : activeView === "audit" ? (
+          <AuditPanel />
         ) : (
           <AppsPanel
             flavor={selectedFlavor}
@@ -62,6 +92,28 @@ export default function App() {
           />
         )}
       </div>
+
+      {activeView === "clusters" && (
+        <button
+          style={bulkBtnStyle}
+          onClick={() => setShowBulk(true)}
+          onMouseEnter={(e) =>
+            ((e.currentTarget as HTMLElement).style.background = "var(--accent-hover)")
+          }
+          onMouseLeave={(e) =>
+            ((e.currentTarget as HTMLElement).style.background = "var(--accent)")
+          }
+        >
+          Bulk Update
+        </button>
+      )}
+
+      {showBulk && (
+        <BulkUpdatePanel
+          structure={structure}
+          onClose={() => setShowBulk(false)}
+        />
+      )}
     </>
   );
 }

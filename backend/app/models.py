@@ -89,3 +89,66 @@ class RepoStructure(BaseModel):
     flavors: list[str]
     environments: dict[str, list[str]]
     clusters: dict[str, list[ClusterInfo]]
+
+
+class AuditEntry(BaseModel):
+    timestamp: str
+    author: str
+    message: str
+    sha: str
+    files_changed: list[str]
+
+
+class AuditLog(BaseModel):
+    entries: list[AuditEntry]
+
+
+class SearchResult(BaseModel):
+    app_name: str
+    field_matched: str
+    value: str
+    file_path: str
+    flavor: str
+    env: str
+    cluster: str
+
+
+class SearchResponse(BaseModel):
+    query: str
+    field: str
+    results: list[SearchResult]
+
+
+class BulkTarget(BaseModel):
+    file_path: str
+    app_name: str
+
+
+class BulkUpdateRequest(BaseModel):
+    targets: list[BulkTarget]
+    field: str
+    value: str
+
+
+class BulkTargetResult(BaseModel):
+    file_path: str
+    app_name: str
+    success: bool
+    message: str
+    commit_url: str | None = None
+
+
+class BulkUpdateResponse(BaseModel):
+    results: list[BulkTargetResult]
+
+
+class DiffPreviewRequest(BaseModel):
+    file_path: str
+    app_name: str
+    field: str
+    value: str
+
+
+class DiffPreviewResponse(BaseModel):
+    before: str
+    after: str

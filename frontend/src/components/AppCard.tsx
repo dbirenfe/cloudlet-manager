@@ -6,6 +6,7 @@ import {
   fetchValuesFiles,
   updateValuesFiles,
   inheritField,
+  previewDiff,
 } from "../api/client";
 
 interface AppCardProps {
@@ -123,6 +124,107 @@ const s: Record<string, CSSProperties> = {
   applyBtnDisabled: { opacity: 0.4, cursor: "not-allowed" },
   successMsg: { fontSize: 12, color: "var(--success)", marginTop: 6 },
   errorMsg: { fontSize: 12, color: "var(--danger)", marginTop: 6 },
+  previewBtn: {
+    padding: "8px 16px",
+    background: "transparent",
+    color: "var(--accent)",
+    border: "1px solid var(--accent)",
+    borderRadius: "var(--radius)",
+    fontSize: 12,
+    fontWeight: 500,
+    cursor: "pointer",
+    transition: "background 0.15s",
+    whiteSpace: "nowrap" as const,
+  },
+  diffOverlay: {
+    position: "fixed" as const,
+    inset: 0,
+    background: "rgba(0,0,0,0.6)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 500,
+  },
+  diffModal: {
+    background: "var(--bg-secondary)",
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius-lg)",
+    width: 700,
+    maxHeight: "80vh",
+    display: "flex",
+    flexDirection: "column" as const,
+    boxShadow: "var(--shadow)",
+  },
+  diffHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "14px 20px",
+    borderBottom: "1px solid var(--border)",
+  },
+  diffTitle: {
+    fontSize: 15,
+    fontWeight: 700,
+    color: "var(--text-primary)",
+  },
+  diffCloseBtn: {
+    background: "none",
+    border: "none",
+    color: "var(--text-muted)",
+    fontSize: 20,
+    cursor: "pointer",
+    padding: "4px 8px",
+  },
+  diffBody: {
+    display: "flex",
+    gap: 0,
+    flex: 1,
+    overflowY: "auto" as const,
+  },
+  diffPane: {
+    flex: 1,
+    padding: 16,
+    fontFamily: "monospace",
+    fontSize: 12,
+    lineHeight: 1.7,
+    whiteSpace: "pre-wrap" as const,
+    overflowX: "auto" as const,
+  },
+  diffPaneBefore: {
+    borderRight: "1px solid var(--border)",
+    background: "var(--bg-input)",
+  },
+  diffPaneAfter: {
+    background: "var(--bg-input)",
+  },
+  diffPaneLabel: {
+    fontSize: 10,
+    fontWeight: 700,
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.08em",
+    color: "var(--text-muted)",
+    marginBottom: 8,
+    display: "block",
+  },
+  diffLineRemoved: {
+    background: "rgba(239, 68, 68, 0.15)",
+    color: "#f87171",
+    display: "block",
+    padding: "0 4px",
+    borderRadius: 2,
+  },
+  diffLineAdded: {
+    background: "rgba(34, 197, 94, 0.15)",
+    color: "#4ade80",
+    display: "block",
+    padding: "0 4px",
+    borderRadius: 2,
+  },
+  diffLineNormal: {
+    display: "block",
+    color: "var(--text-secondary)",
+    padding: "0 4px",
+  },
   definedAt: {
     fontSize: 11,
     color: "var(--text-muted)",
@@ -223,6 +325,12 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
   const [result, setResult] = useState<UpdateResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [showDiff, setShowDiff] = useState(false);
+  const [diffBefore, setDiffBefore] = useState("");
+  const [diffAfter, setDiffAfter] = useState("");
+  const [loadingDiff, setLoadingDiff] = useState(false);
+  const [diffError, setDiffError] = useState<string | null>(null);
+
   useEffect(() => {
     setSelectedBranch(branch_info.is_local ? branch_info.value : INHERIT_VALUE);
     setEditedValues(values_info.is_local ? [...values_info.values] : []);
@@ -301,6 +409,26 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
       setError(e instanceof Error ? e.message : "Update failed");
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handlePreview = async () => {
+    setLoadingDiff(true);
+    setDiffError(null);
+    try {
+      const diffField = isBranchChanged ? "targetRevision" : "valuesFiles";
+      const diffValue = isBranchChanged
+        ? (selectedBranch === INHERIT_VALUE ? "" : selectedBranch)
+        : (valuesInherit ? "" : editedValues.join(","));
+
+      const data = await previewDiff(scopeFile, app.name, diffField, diffValue);
+      setDiffBefore(data.before);
+      setDiffAfter(data.after);
+      setShowDiff(true);
+    } catch (e) {
+      setDiffError(e instanceof Error ? e.message : "Preview failed");
+    } finally {
+      setLoadingDiff(false);
     }
   };
 
@@ -478,7 +606,7 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
         )}
       </div>
 
-      {/* Apply button */}
+      {/* Apply / Preview buttons */}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <button
           style={{
@@ -498,6 +626,21 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
           {updating ? "Applying..." : "Apply Changes"}
         </button>
         {hasAnyChange && (
+          <button
+            style={s.previewBtn}
+            onClick={handlePreview}
+            disabled={loadingDiff}
+            onMouseEnter={(e) =>
+              ((e.currentTarget as HTMLElement).style.background = "var(--accent-muted)")
+            }
+            onMouseLeave={(e) =>
+              ((e.currentTarget as HTMLElement).style.background = "transparent")
+            }
+          >
+            {loadingDiff ? "Loading..." : "Preview"}
+          </button>
+        )}
+        {hasAnyChange && (
           <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
             {[
               isBranchChanged &&
@@ -514,6 +657,11 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
           </span>
         )}
       </div>
+      {diffError && (
+        <div style={{ fontSize: 12, color: "var(--danger)", marginTop: 6 }}>
+          {diffError}
+        </div>
+      )}
 
       {result && (
         <div style={s.successMsg}>
@@ -541,6 +689,57 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
           </span>
         )}
       </div>
+
+      {showDiff && (
+        <div
+          style={s.diffOverlay}
+          onClick={(e) => e.target === e.currentTarget && setShowDiff(false)}
+        >
+          <div style={s.diffModal}>
+            <div style={s.diffHeader}>
+              <span style={s.diffTitle}>Diff Preview — {app.name}</span>
+              <button
+                style={s.diffCloseBtn}
+                onClick={() => setShowDiff(false)}
+              >
+                &times;
+              </button>
+            </div>
+            <div style={s.diffBody}>
+              <div style={{ ...s.diffPane, ...s.diffPaneBefore }}>
+                <span style={s.diffPaneLabel}>Before</span>
+                {diffBefore.split("\n").map((line, i) => (
+                  <span
+                    key={i}
+                    style={
+                      diffAfter.split("\n")[i] !== line
+                        ? s.diffLineRemoved
+                        : s.diffLineNormal
+                    }
+                  >
+                    {line || "\u00A0"}
+                  </span>
+                ))}
+              </div>
+              <div style={{ ...s.diffPane, ...s.diffPaneAfter }}>
+                <span style={s.diffPaneLabel}>After</span>
+                {diffAfter.split("\n").map((line, i) => (
+                  <span
+                    key={i}
+                    style={
+                      diffBefore.split("\n")[i] !== line
+                        ? s.diffLineAdded
+                        : s.diffLineNormal
+                    }
+                  >
+                    {line || "\u00A0"}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

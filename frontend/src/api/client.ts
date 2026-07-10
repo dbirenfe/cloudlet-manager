@@ -165,3 +165,93 @@ export async function fetchAuthConfig(): Promise<{
 }> {
   return request("/api/auth/config");
 }
+
+export interface AuditEntry {
+  sha: string;
+  message: string;
+  author: string;
+  timestamp: string;
+  files_changed: string[];
+}
+
+export interface AuditResponse {
+  entries: AuditEntry[];
+}
+
+export async function fetchAuditLog(limit = 50): Promise<AuditResponse> {
+  return request<AuditResponse>(`/api/audit?limit=${limit}`);
+}
+
+export interface SearchResult {
+  app_name: string;
+  field_matched: string;
+  value: string;
+  file_path: string;
+  flavor: string;
+  env: string;
+  cluster: string;
+}
+
+export interface SearchResponse {
+  results: SearchResult[];
+}
+
+export type SearchField = "branch" | "values" | "missing";
+
+export async function searchApps(
+  query: string,
+  field: SearchField = "branch"
+): Promise<SearchResponse> {
+  const params = new URLSearchParams({ query, field });
+  return request<SearchResponse>(`/api/search?${params.toString()}`);
+}
+
+export interface BulkTarget {
+  file_path: string;
+  app_name: string;
+}
+
+export interface BulkUpdateResult {
+  file_path: string;
+  app_name: string;
+  success: boolean;
+  message: string;
+  commit_url?: string;
+}
+
+export interface BulkUpdateResponse {
+  results: BulkUpdateResult[];
+}
+
+export async function bulkUpdate(
+  targets: BulkTarget[],
+  field: "targetRevision" | "valuesFiles",
+  value: string
+): Promise<BulkUpdateResponse> {
+  return request<BulkUpdateResponse>("/api/bulk-update", {
+    method: "POST",
+    body: JSON.stringify({ targets, field, value }),
+  });
+}
+
+export interface DiffPreviewResponse {
+  before: string;
+  after: string;
+}
+
+export async function previewDiff(
+  filePath: string,
+  appName: string,
+  field: string,
+  value: string
+): Promise<DiffPreviewResponse> {
+  return request<DiffPreviewResponse>("/api/preview-diff", {
+    method: "POST",
+    body: JSON.stringify({
+      file_path: filePath,
+      app_name: appName,
+      field,
+      value,
+    }),
+  });
+}

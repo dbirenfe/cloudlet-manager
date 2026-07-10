@@ -144,6 +144,13 @@ def _parse_repo_url(url: str) -> str | None:
     return None
 
 
+async def get_commits(repo: str, branch: str, limit: int = 50) -> list[dict]:
+    """Get recent commits from a repo."""
+    s = get_settings()
+    url = f"{s.github_api_url}/repos/{repo}/commits?sha={branch}&per_page={limit}"
+    return await _get(url)
+
+
 def parse_yaml(content: str) -> dict:
     """Parse YAML content, return empty dict on failure."""
     try:
