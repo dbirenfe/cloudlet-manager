@@ -414,6 +414,9 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
       }
 
       setResult(lastResult);
+      setShowDiff(false);
+      setDiffBefore("");
+      setDiffAfter("");
       onUpdated();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Update failed");

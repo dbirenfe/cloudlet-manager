@@ -540,9 +540,14 @@ async def preview_diff(
     None means no change for that field.
     """
     s = get_settings()
-    content = await get_file_content(s.github_spec_repo, file_path, s.github_spec_branch)
+    try:
+        content = await get_file_content(s.github_spec_repo, file_path, s.github_spec_branch)
+    except Exception:
+        return "# File not found or empty\n", "# File not found or empty\n"
     before = content
     data = parse_yaml(content)
+    if not data:
+        return before, before
 
     if branch_action == "inherit":
         if app_name in data:
