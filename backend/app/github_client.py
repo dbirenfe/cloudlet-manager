@@ -8,6 +8,7 @@ from app.config import get_settings
 
 _branch_cache: TTLCache = TTLCache(maxsize=256, ttl=300)
 _files_cache: TTLCache = TTLCache(maxsize=256, ttl=300)
+_content_cache: TTLCache = TTLCache(maxsize=512, ttl=120)
 
 
 def _headers() -> dict[str, str]:
@@ -40,13 +41,24 @@ async def get_repo_tree(repo: str, branch: str) -> list[dict]:
     return data.get("tree", [])
 
 
-async def get_file_content(repo: str, path: str, branch: str) -> str:
+async def get_file_content(repo: str, path: str, branch: str, use_cache: bool = True) -> str:
     """Fetch and decode a file from a GitHub repo."""
+    cache_key = f"{repo}:{branch}:{path}"
+    if use_cache and cache_key in _content_cache:
+        return _content_cache[cache_key]
     s = get_settings()
     url = f"{s.github_api_url}/repos/{repo}/contents/{path}?ref={branch}"
     data = await _get(url)
     content = base64.b64decode(data["content"]).decode("utf-8")
+    if use_cache:
+        _content_cache[cache_key] = content
     return content
+
+
+def invalidate_content_cache(repo: str, path: str, branch: str) -> None:
+    """Remove a file from the content cache after updating it."""
+    cache_key = f"{repo}:{branch}:{path}"
+    _content_cache.pop(cache_key, None)
 
 
 async def get_file_sha(repo: str, path: str, branch: str) -> str:
@@ -73,7 +85,9 @@ async def update_file(repo: str, path: str, branch: str, content: str, message: 
             "branch": branch,
         }
         try:
-            return await _put(url, body)
+            result = await _put(url, body)
+            invalidate_content_cache(repo, path, branch)
+            return result
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 409 and attempt < retries - 1:
                 await asyncio.sleep(0.5 * (attempt + 1))

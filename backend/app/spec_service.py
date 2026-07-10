@@ -450,36 +450,40 @@ async def search_all_apps(query: str, field: str = "branch") -> list[SearchResul
                     missing_checks.append((app_name, tr, repo_url, path, flavor, env, cluster))
                 continue
 
-            tr = _extract_target_revision(app_data)
-            if tr and query.lower() in tr.lower():
-                results.append(
-                    SearchResult(
-                        app_name=app_name,
-                        field_matched="targetRevision",
-                        value=tr,
-                        file_path=path,
-                        flavor=flavor,
-                        env=env,
-                        cluster=cluster,
-                    )
-                )
+            q = query.lower()
 
-            vf = _extract_values_files(app_data)
-            if vf:
-                for v in vf:
-                    if query.lower() in v.lower():
-                        results.append(
-                            SearchResult(
-                                app_name=app_name,
-                                field_matched="valuesFiles",
-                                value=v,
-                                file_path=path,
-                                flavor=flavor,
-                                env=env,
-                                cluster=cluster,
-                            )
+            if field == "branch":
+                tr = _extract_target_revision(app_data)
+                if tr and q in tr.lower():
+                    results.append(
+                        SearchResult(
+                            app_name=app_name,
+                            field_matched="targetRevision",
+                            value=tr,
+                            file_path=path,
+                            flavor=flavor,
+                            env=env,
+                            cluster=cluster,
                         )
-                        break
+                    )
+
+            elif field == "values":
+                vf = _extract_values_files(app_data)
+                if vf:
+                    for v in vf:
+                        if q in v.lower():
+                            results.append(
+                                SearchResult(
+                                    app_name=app_name,
+                                    field_matched="valuesFiles",
+                                    value=v,
+                                    file_path=path,
+                                    flavor=flavor,
+                                    env=env,
+                                    cluster=cluster,
+                                )
+                            )
+                            break
 
     if missing_checks:
         exists_results = await asyncio.gather(
