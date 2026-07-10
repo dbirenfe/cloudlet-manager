@@ -212,17 +212,21 @@ export default function Header({ activeView, onViewChange, onSearchNavigate }: H
 
   useEffect(() => {
     let cancelled = false;
-    setLoadingMissing(true);
-    searchApps("", "missing")
-      .then((data) => {
-        if (!cancelled) {
-          setMissingResults(data.results);
-          setMissingLoaded(true);
-        }
-      })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setLoadingMissing(false); });
-    return () => { cancelled = true; };
+    const fetchMissing = () => {
+      setLoadingMissing(true);
+      searchApps("", "missing")
+        .then((data) => {
+          if (!cancelled) {
+            setMissingResults(data.results);
+            setMissingLoaded(true);
+          }
+        })
+        .catch(() => {})
+        .finally(() => { if (!cancelled) setLoadingMissing(false); });
+    };
+    fetchMissing();
+    const interval = setInterval(fetchMissing, 5 * 60 * 1000);
+    return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
   const doSearch = useCallback(
