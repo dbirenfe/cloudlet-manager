@@ -287,11 +287,8 @@ async def update_app_branch(
     file_path: str,
     app_name: str,
     new_branch: str,
+    username: str = "unknown",
 ) -> dict:
-    """
-    Update the targetRevision for a specific app in a specific file.
-    If the app doesn't exist in the file yet, creates a minimal override entry.
-    """
     s = get_settings()
     content = await get_file_content(s.github_spec_repo, file_path, s.github_spec_branch)
     data = parse_yaml(content)
@@ -306,7 +303,7 @@ async def update_app_branch(
         data[app_name] = {"source": {"targetRevision": new_branch}}
 
     new_content = yaml.dump(data, default_flow_style=False, sort_keys=False)
-    message = f"cloudlet-manager: update {app_name} targetRevision from '{old_branch}' to '{new_branch}' in {file_path}"
+    message = f"[{username}] update {app_name} targetRevision from '{old_branch}' to '{new_branch}' in {file_path}"
     return await update_file(
         s.github_spec_repo, file_path, s.github_spec_branch, new_content, message
     )
@@ -316,17 +313,14 @@ async def update_app_values(
     file_path: str,
     app_name: str,
     values_files: list[str],
+    username: str = "unknown",
 ) -> dict:
-    """
-    Update the helm.valuesFiles for a specific app in a specific file.
-    If the app doesn't exist in the file yet, creates a minimal override entry.
-    """
     s = get_settings()
     content = await get_file_content(s.github_spec_repo, file_path, s.github_spec_branch)
     data = parse_yaml(content)
 
     if not values_files:
-        return await inherit_field(file_path, app_name, "valuesFiles")
+        return await inherit_field(file_path, app_name, "valuesFiles", username=username)
 
     if app_name in data:
         if "source" not in data[app_name]:
@@ -340,7 +334,7 @@ async def update_app_values(
         data[app_name] = {"source": {"helm": {"valuesFiles": values_files}}}
 
     new_content = yaml.dump(data, default_flow_style=False, sort_keys=False)
-    message = f"cloudlet-manager: update {app_name} valuesFiles from {old_values} to {values_files} in {file_path}"
+    message = f"[{username}] update {app_name} valuesFiles from {old_values} to {values_files} in {file_path}"
     return await update_file(
         s.github_spec_repo, file_path, s.github_spec_branch, new_content, message
     )
@@ -350,11 +344,8 @@ async def inherit_field(
     file_path: str,
     app_name: str,
     field: str,
+    username: str = "unknown",
 ) -> dict:
-    """
-    Remove a field override from an app in a file so it inherits from the parent scope.
-    If no overrides remain for the app, removes the entire app entry.
-    """
     s = get_settings()
     content = await get_file_content(s.github_spec_repo, file_path, s.github_spec_branch)
     data = parse_yaml(content)
@@ -386,7 +377,7 @@ async def inherit_field(
     else:
         new_content = yaml.dump(data, default_flow_style=False, sort_keys=False)
 
-    message = f"cloudlet-manager: inherit {field} for {app_name} from parent scope (removed '{removed_value}' from {file_path})"
+    message = f"[{username}] inherit {field} for {app_name} from parent scope (removed '{removed_value}' from {file_path})"
     return await update_file(
         s.github_spec_repo, file_path, s.github_spec_branch, new_content, message
     )
@@ -396,15 +387,19 @@ async def get_audit_log(limit: int = 50) -> list[AuditEntry]:
     s = get_settings()
     commits = await get_commits(s.github_spec_repo, s.github_spec_branch, limit)
     entries: list[AuditEntry] = []
+    import re
     for c in commits:
         commit_data = c.get("commit", {})
         author_data = commit_data.get("author", {})
+        message = commit_data.get("message", "")
         files = [f["filename"] for f in c.get("files", [])]
+        match = re.match(r"^\[(.+?)\] ", message)
+        author = match.group(1) if match else author_data.get("name", "unknown")
         entries.append(
             AuditEntry(
                 timestamp=author_data.get("date", ""),
-                author=author_data.get("name", "unknown"),
-                message=commit_data.get("message", ""),
+                author=author,
+                message=message,
                 sha=c.get("sha", ""),
                 files_changed=files,
             )
@@ -512,6 +507,7 @@ async def bulk_update(
     targets: list[dict],
     field: str,
     value: str,
+    username: str = "unknown",
 ) -> list[BulkTargetResult]:
     results: list[BulkTargetResult] = []
     for target in targets:
@@ -519,9 +515,9 @@ async def bulk_update(
         app_name = target["app_name"]
         try:
             if field == "targetRevision":
-                result = await update_app_branch(file_path, app_name, value)
+                result = await update_app_branch(file_path, app_name, value, username=username)
             elif field == "valuesFiles":
-                result = await update_app_values(file_path, app_name, [value])
+                result = await update_app_values(file_path, app_name, [value], username=username)
             else:
                 raise ValueError(f"Unsupported field: {field}")
             commit_url = result.get("commit", {}).get("html_url", "")

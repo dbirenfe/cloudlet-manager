@@ -94,9 +94,9 @@ async def update_branch(
     user: dict = Depends(get_current_user),
 ):
     try:
-        result = await update_app_branch(req.file_path, req.app_name, req.new_branch)
-        commit_url = result.get("commit", {}).get("html_url", "")
         username = user.get("preferred_username", "unknown")
+        result = await update_app_branch(req.file_path, req.app_name, req.new_branch, username=username)
+        commit_url = result.get("commit", {}).get("html_url", "")
         return BranchUpdateResponse(
             success=True,
             message=f"Branch updated by {username}",
@@ -124,9 +124,9 @@ async def update_values(
     user: dict = Depends(get_current_user),
 ):
     try:
-        result = await update_app_values(req.file_path, req.app_name, req.values_files)
-        commit_url = result.get("commit", {}).get("html_url", "")
         username = user.get("preferred_username", "unknown")
+        result = await update_app_values(req.file_path, req.app_name, req.values_files, username=username)
+        commit_url = result.get("commit", {}).get("html_url", "")
         return UpdateResponse(
             success=True,
             message=f"Values file updated by {username}",
@@ -145,9 +145,9 @@ async def inherit_field_endpoint(
 ):
     """Remove a field override so it inherits from the parent scope."""
     try:
-        result = await inherit_field(req.file_path, req.app_name, req.field)
-        commit_url = result.get("commit", {}).get("html_url", "")
         username = user.get("preferred_username", "unknown")
+        result = await inherit_field(req.file_path, req.app_name, req.field, username=username)
+        commit_url = result.get("commit", {}).get("html_url", "")
         return UpdateResponse(
             success=True,
             message=f"Now inheriting {req.field} from parent scope (by {username})",
@@ -184,8 +184,9 @@ async def bulk_update_endpoint(
     user: dict = Depends(get_current_user),
 ):
     try:
+        username = user.get("preferred_username", "unknown")
         targets = [{"file_path": t.file_path, "app_name": t.app_name} for t in req.targets]
-        results = await bulk_update(targets, req.field, req.value)
+        results = await bulk_update(targets, req.field, req.value, username=username)
         return BulkUpdateResponse(results=results)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Bulk update failed: {e}")
