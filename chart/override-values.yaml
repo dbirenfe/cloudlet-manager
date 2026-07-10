@@ -9,7 +9,7 @@ backend:
 frontend:
   image:
     repository: quay.io/dbirenfe/cloudlet-frontend
-    tag: "1.1.0"
+    tag: "1.1.1"
   replicas: 1
 
 oauthProxy:

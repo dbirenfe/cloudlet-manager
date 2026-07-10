@@ -2,6 +2,7 @@ import { type CSSProperties, useEffect, useState } from "react";
 import type {
   RepoStructure,
   ClusterInfo,
+  AppConfig,
   BulkTarget,
   BulkUpdateResult,
 } from "../api/client";
@@ -198,7 +199,7 @@ export default function BulkUpdatePanel({
   const [selectedClusters, setSelectedClusters] = useState<Set<string>>(
     new Set()
   );
-  const [appNames, setAppNames] = useState<string[]>([]);
+  const [appConfigs, setAppConfigs] = useState<AppConfig[]>([]);
   const [selectedApp, setSelectedApp] = useState("");
   const [branches, setBranches] = useState<string[]>([]);
   const [newValue, setNewValue] = useState("");
@@ -206,6 +207,8 @@ export default function BulkUpdatePanel({
   const [applying, setApplying] = useState(false);
   const [results, setResults] = useState<BulkUpdateResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const appNames = appConfigs.map((a) => a.name);
 
   const allClusters: (ClusterInfo & { envKey: string })[] = [];
   if (structure) {
@@ -236,8 +239,13 @@ export default function BulkUpdatePanel({
   };
 
   useEffect(() => {
+    setSelectedApp("");
+    setBranches([]);
+    setNewValue("");
+    setResults(null);
+
     if (selectedClusters.size === 0) {
-      setAppNames([]);
+      setAppConfigs([]);
       return;
     }
     const first = Array.from(selectedClusters)[0];
@@ -249,13 +257,10 @@ export default function BulkUpdatePanel({
     let cancelled = false;
     fetchApps(flavor, env, cluster)
       .then((data) => {
-        if (!cancelled) {
-          setAppNames(data.apps.map((a) => a.name));
-          if (data.apps.length > 0) setSelectedApp(data.apps[0].name);
-        }
+        if (!cancelled) setAppConfigs(data.apps);
       })
       .catch(() => {
-        if (!cancelled) setAppNames([]);
+        if (!cancelled) setAppConfigs([]);
       });
 
     return () => {
@@ -264,27 +269,26 @@ export default function BulkUpdatePanel({
   }, [selectedClusters]);
 
   useEffect(() => {
-    if (!selectedApp || appNames.length === 0) return;
+    setBranches([]);
+    setNewValue("");
+    if (!selectedApp) return;
+
+    const app = appConfigs.find((a) => a.name === selectedApp);
+    if (!app) return;
+
     let cancelled = false;
-    fetchApps()
-      .then((data) => {
-        const app = data.apps.find((a) => a.name === selectedApp);
-        if (app && !cancelled) {
-          fetchBranches(app.source.repoURL)
-            .then((b) => {
-              if (!cancelled) setBranches(b.branches);
-            })
-            .catch(() => {
-              if (!cancelled) setBranches([]);
-            });
-        }
+    fetchBranches(app.source.repoURL)
+      .then((b) => {
+        if (!cancelled) setBranches(b.branches);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setBranches([]);
+      });
 
     return () => {
       cancelled = true;
     };
-  }, [selectedApp, appNames]);
+  }, [selectedApp]);
 
   const targets: BulkTarget[] = Array.from(selectedClusters).map((key) => {
     const parts = key.split("/");
