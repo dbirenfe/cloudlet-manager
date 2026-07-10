@@ -6,6 +6,7 @@ interface HeaderProps {
   activeView: "clusters" | "audit";
   onViewChange: (view: "clusters" | "audit") => void;
   onSearchNavigate?: (flavor: string, env: string, cluster: string) => void;
+  username?: string;
 }
 
 const styles: Record<string, CSSProperties> = {
@@ -194,7 +195,7 @@ function SearchIcon() {
   );
 }
 
-export default function Header({ activeView, onViewChange, onSearchNavigate }: HeaderProps) {
+export default function Header({ activeView, onViewChange, onSearchNavigate, username }: HeaderProps) {
   const [query, setQuery] = useState("");
   const [field, setField] = useState<SearchField>("branch");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -543,6 +544,32 @@ export default function Header({ activeView, onViewChange, onSearchNavigate }: H
           )}
         </div>
       </div>
+
+      {username && (
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          color: "var(--text-secondary)",
+          fontSize: 13,
+        }}>
+          <div style={{
+            width: 28,
+            height: 28,
+            borderRadius: "50%",
+            background: "var(--accent-muted)",
+            color: "var(--accent)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 12,
+            fontWeight: 700,
+          }}>
+            {username.charAt(0).toUpperCase()}
+          </div>
+          <span style={{ fontWeight: 500 }}>{username}</span>
+        </div>
+      )}
     </header>
   );
 }

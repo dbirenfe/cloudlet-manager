@@ -64,6 +64,16 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/api/me")
+async def me(user: dict = Depends(get_current_user)):
+    return {
+        "username": user.get("preferred_username", "unknown"),
+        "name": user.get("name", user.get("preferred_username", "")),
+        "email": user.get("email", ""),
+        "groups": user.get("groups", []),
+    }
+
+
 @app.get("/api/structure", response_model=RepoStructure)
 async def structure(user: dict = Depends(get_current_user)):
     return await get_structure()

@@ -85,6 +85,17 @@ export async function fetchStructure(): Promise<RepoStructure> {
   return request<RepoStructure>("/api/structure");
 }
 
+export interface UserInfo {
+  username: string;
+  name: string;
+  email: string;
+  groups: string[];
+}
+
+export async function fetchMe(): Promise<UserInfo> {
+  return request<UserInfo>("/api/me");
+}
+
 export async function fetchApps(
   flavor?: string,
   env?: string,

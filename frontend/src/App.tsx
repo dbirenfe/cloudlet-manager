@@ -4,8 +4,8 @@ import Sidebar from "./components/Sidebar";
 import AppsPanel from "./components/AppsPanel";
 import AuditPanel from "./components/AuditPanel";
 import BulkUpdatePanel from "./components/BulkUpdatePanel";
-import type { RepoStructure } from "./api/client";
-import { fetchStructure } from "./api/client";
+import type { RepoStructure, UserInfo } from "./api/client";
+import { fetchStructure, fetchMe } from "./api/client";
 
 const bulkBtnStyle: CSSProperties = {
   position: "fixed",
@@ -32,11 +32,13 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<"clusters" | "audit">("clusters");
   const [showBulk, setShowBulk] = useState(false);
+  const [user, setUser] = useState<UserInfo | null>(null);
 
   useEffect(() => {
     fetchStructure()
       .then(setStructure)
       .catch((e) => setError(e.message));
+    fetchMe().then(setUser).catch(() => {});
   }, []);
 
   const handleSelect = (
@@ -56,6 +58,7 @@ export default function App() {
         activeView={activeView}
         onViewChange={setActiveView}
         onSearchNavigate={handleSelect}
+        username={user?.username}
       />
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {activeView === "clusters" && (
