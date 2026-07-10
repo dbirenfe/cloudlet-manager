@@ -335,7 +335,7 @@ export default function Header({ activeView, onViewChange, onSearchNavigate, use
         </div>
       </div>
 
-      <div style={{ ...styles.center, gap: 12 }} ref={wrapRef}>
+      <div style={styles.center} ref={wrapRef}>
         <div style={styles.searchWrap}>
           <div style={styles.searchIcon}>
             <SearchIcon />
@@ -427,45 +427,49 @@ export default function Header({ activeView, onViewChange, onSearchNavigate, use
             </div>
           )}
         </div>
+      </div>
 
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <div ref={missingRef} style={{ position: "relative" }}>
           <button
             onClick={loadMissing}
             title="Missing branches"
             style={{
-              background: showMissing ? "var(--warning-bg)" : "var(--bg-input)",
-              border: "1px solid var(--border)",
+              background: showMissing ? "var(--warning-bg)" : "transparent",
+              border: "none",
               borderRadius: "var(--radius)",
-              padding: "7px 10px",
+              padding: "6px 8px",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
-              gap: 6,
+              gap: 4,
               color: missingResults.length > 0 ? "var(--warning)" : "var(--text-muted)",
-              fontSize: 12,
-              fontWeight: 500,
               transition: "all 0.15s",
-              whiteSpace: "nowrap" as const,
+              position: "relative" as const,
             }}
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
               <path d="M8 1.5C5.5 1.5 4 3.5 4 5.5V9L2.5 11.5H13.5L12 9V5.5C12 3.5 10.5 1.5 8 1.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
               <path d="M6.5 12.5C6.5 13.3 7.2 14 8 14C8.8 14 9.5 13.3 9.5 12.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
             </svg>
             {missingLoaded && missingResults.length > 0 && (
               <span style={{
+                position: "absolute" as const,
+                top: 2,
+                right: 2,
                 background: "var(--warning)",
                 color: "#000",
                 borderRadius: 10,
-                padding: "0 6px",
-                fontSize: 10,
+                padding: "0 5px",
+                fontSize: 9,
                 fontWeight: 700,
-                lineHeight: "16px",
+                lineHeight: "14px",
+                minWidth: 14,
+                textAlign: "center" as const,
               }}>
                 {missingResults.length}
               </span>
             )}
-            {!missingLoaded && "Alerts"}
           </button>
 
           {showMissing && (
@@ -543,33 +547,35 @@ export default function Header({ activeView, onViewChange, onSearchNavigate, use
             </div>
           )}
         </div>
-      </div>
 
-      {username && (
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          color: "var(--text-secondary)",
-          fontSize: 13,
-        }}>
+        {username && (
           <div style={{
-            width: 28,
-            height: 28,
-            borderRadius: "50%",
-            background: "var(--accent-muted)",
-            color: "var(--accent)",
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            fontSize: 12,
-            fontWeight: 700,
+            gap: 8,
+            color: "var(--text-secondary)",
+            fontSize: 13,
+            borderLeft: "1px solid var(--border)",
+            paddingLeft: 14,
           }}>
-            {username.charAt(0).toUpperCase()}
+            <div style={{
+              width: 28,
+              height: 28,
+              borderRadius: "50%",
+              background: "var(--accent-muted)",
+              color: "var(--accent)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 12,
+              fontWeight: 700,
+            }}>
+              {username.charAt(0).toUpperCase()}
+            </div>
+            <span style={{ fontWeight: 500 }}>{username}</span>
           </div>
-          <span style={{ fontWeight: 500 }}>{username}</span>
-        </div>
-      )}
+        )}
+      </div>
     </header>
   );
 }
