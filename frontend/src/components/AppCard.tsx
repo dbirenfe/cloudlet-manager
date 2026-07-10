@@ -352,21 +352,29 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
     }
   };
 
+  const [valuesLoadedForBranch, setValuesLoadedForBranch] = useState("");
+
   const loadValuesFiles = async () => {
-    if (availableValues.length > 0) return;
+    const activeBranch = selectedBranch === INHERIT_VALUE
+      ? (branch_info.parent_value || branch_info.value || "main")
+      : selectedBranch;
+    if (availableValues.length > 0 && valuesLoadedForBranch === activeBranch) return;
     setLoadingValues(true);
     try {
-      const data = await fetchValuesFiles(
-        app.source.repoURL,
-        app.source.targetRevision || "main"
-      );
+      const data = await fetchValuesFiles(app.source.repoURL, activeBranch);
       setAvailableValues(data.files);
+      setValuesLoadedForBranch(activeBranch);
     } catch {
       setAvailableValues([]);
     } finally {
       setLoadingValues(false);
     }
   };
+
+  useEffect(() => {
+    setAvailableValues([]);
+    setValuesLoadedForBranch("");
+  }, [selectedBranch]);
 
   // Determine what changed
   const currentBranchState = branch_info.is_local ? branch_info.value : INHERIT_VALUE;
@@ -416,14 +424,30 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
     setLoadingDiff(true);
     setDiffError(null);
     try {
-      const diffField = isBranchChanged ? "targetRevision" : "valuesFiles";
-      const diffValue = isBranchChanged
-        ? (selectedBranch === INHERIT_VALUE ? "" : selectedBranch)
-        : (valuesInherit ? "" : editedValues.join(","));
+      let before = "";
+      let after = "";
 
-      const data = await previewDiff(scopeFile, app.name, diffField, diffValue);
-      setDiffBefore(data.before);
-      setDiffAfter(data.after);
+      if (isBranchChanged) {
+        const branchValue = selectedBranch === INHERIT_VALUE ? "" : selectedBranch;
+        const data = await previewDiff(scopeFile, app.name, "targetRevision", branchValue);
+        before = data.before;
+        after = data.after;
+      }
+
+      if (isValuesChanged) {
+        const valuesValue = valuesInherit ? "" : editedValues.join(",");
+        const data = await previewDiff(scopeFile, app.name, "valuesFiles", valuesValue);
+        if (!before) {
+          before = data.before;
+          after = data.after;
+        } else {
+          before += "\n--- Values change ---\n" + data.before;
+          after += "\n--- Values change ---\n" + data.after;
+        }
+      }
+
+      setDiffBefore(before);
+      setDiffAfter(after);
       setShowDiff(true);
     } catch (e) {
       setDiffError(e instanceof Error ? e.message : "Preview failed");
