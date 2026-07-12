@@ -31,6 +31,8 @@ spec:
                 secretKeyRef:
                   name: cloudlet-git-token
                   key: token
+            - name: CLOUDLET_GIT_PROVIDER
+              value: {{ .Values.git.provider | quote }}
             - name: CLOUDLET_GITHUB_SPEC_REPO
               value: {{ .Values.git.specRepo | quote }}
             - name: CLOUDLET_GITHUB_SPEC_BRANCH

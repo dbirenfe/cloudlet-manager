@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     github_spec_repo: str = "dbirenfe/cloudlets-spec"
     github_spec_branch: str = "main"
     github_api_url: str = "https://api.github.com"
+    git_provider: str = "github"  # "github" or "gitlab"
 
     keycloak_url: str = ""
     keycloak_realm: str = ""

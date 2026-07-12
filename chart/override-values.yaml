@@ -22,9 +22,10 @@ oauthProxy:
     tag: "v7.7.1"
 
 git:
-  specRepo: ""       # e.g. "myorg/cloudlets-spec"
+  provider: "gitlab" # "github" (also Gitea) or "gitlab"
+  specRepo: ""       # e.g. "myorg/cloudlets-spec" or "group/subgroup/project"
   specBranch: "main"
-  apiUrl: ""         # e.g. "https://gitea.internal.example.com/api/v1"
+  apiUrl: ""         # e.g. "https://gitlab.example.com/api/v4"
 
 sso:
   enabled: true

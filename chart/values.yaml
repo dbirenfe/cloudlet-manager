@@ -55,12 +55,16 @@ oauthProxy:
 
 # -- Git server configuration (non-sensitive)
 git:
-  # -- The cloudlets-spec repository in "owner/repo" format
+  # -- Git provider: "github" (also works with Gitea) or "gitlab"
+  provider: "github"
+  # -- The cloudlets-spec repository in "owner/repo" or "group/project" format
   specRepo: ""       # e.g. "myorg/cloudlets-spec"
   # -- Branch to read/write in the spec repo
   specBranch: "main"
-  # -- Git API base URL (GitHub, Gitea, GitLab, etc.)
-  apiUrl: ""         # e.g. "https://gitea.internal.example.com/api/v1"
+  # -- Git API base URL
+  # GitHub/Gitea: e.g. "https://gitea.internal.example.com/api/v1"
+  # GitLab:       e.g. "https://gitlab.internal.example.com/api/v4"
+  apiUrl: ""
 
 # -- SSO / RHBK (Keycloak) configuration (non-sensitive parts)
 sso:
