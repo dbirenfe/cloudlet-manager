@@ -247,6 +247,8 @@ async def list_values_files(repo_url: str, branch: str = "main") -> list[str]:
             item["path"]
             for item in tree
             if item["type"] == "blob"
+            and "/" not in item["path"]
+            and "values" in item["path"].lower()
             and (item["path"].endswith(".yaml") or item["path"].endswith(".yml"))
         ]
         _files_cache[cache_key] = files

@@ -144,14 +144,14 @@ def _extract_values_files(app_data: dict) -> list[str] | None:
         return None
     helm = src.get("helm", {})
     if not isinstance(helm, dict):
-        return None
+        return ["values.yaml"]
     key = _values_key(helm)
     vf = helm.get(key)
     if vf is None:
-        return None
+        return ["values.yaml"]
     if isinstance(vf, list):
         return [str(f) for f in vf]
-    return None
+    return ["values.yaml"]
 
 
 def _extract_target_revision(app_data: dict) -> str | None:
