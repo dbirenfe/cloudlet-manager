@@ -131,6 +131,13 @@ async def _load_apps_file(path: str) -> dict:
         return {}
 
 
+def _values_key(helm: dict) -> str:
+    """Detect whether the YAML uses 'valueFiles' or 'valuesFiles'."""
+    if "valueFiles" in helm:
+        return "valueFiles"
+    return "valuesFiles"
+
+
 def _extract_values_files(app_data: dict) -> list[str] | None:
     src = _get_source(app_data)
     if not src:
@@ -138,7 +145,8 @@ def _extract_values_files(app_data: dict) -> list[str] | None:
     helm = src.get("helm", {})
     if not isinstance(helm, dict):
         return None
-    vf = helm.get("valuesFiles")
+    key = _values_key(helm)
+    vf = helm.get(key)
     if vf is None:
         return None
     if isinstance(vf, list):
@@ -150,7 +158,7 @@ def _extract_target_revision(app_data: dict) -> str | None:
     src = _get_source(app_data)
     if not src:
         return None
-    return src.get("targetRevision")
+    return src.get("targetRevision") or "main"
 
 
 def _extract_repo_url(app_data: dict) -> str | None:
@@ -397,11 +405,12 @@ async def update_app_values(
         src = _get_or_create_source(app_data)
         if "helm" not in src:
             src["helm"] = {}
-        old_values = src["helm"].get("valuesFiles", [])
-        src["helm"]["valuesFiles"] = values_files
+        key = _values_key(src["helm"])
+        old_values = src["helm"].get(key, [])
+        src["helm"][key] = values_files
     else:
         old_values = "inherited"
-        data[app_name] = {"source": {"helm": {"valuesFiles": values_files}}}
+        data[app_name] = {"source": {"helm": {"valueFiles": values_files}}}
 
     new_content = yaml.dump(data, default_flow_style=False, sort_keys=False)
     message = f"[{username}] update {app_name} valuesFiles from {old_values} to {values_files} in {file_path}"
@@ -431,7 +440,8 @@ async def inherit_field(
         removed_value = src.pop("targetRevision", None)
     elif field == "valuesFiles":
         helm = src.get("helm", {})
-        removed_value = helm.pop("valuesFiles", None)
+        key = _values_key(helm)
+        removed_value = helm.pop(key, None)
         if not helm:
             src.pop("helm", None)
     else:
@@ -647,7 +657,8 @@ async def preview_diff(
         if app_data:
             src = _get_source(app_data) or {}
             helm = src.get("helm", {})
-            helm.pop("valuesFiles", None)
+            key = _values_key(helm)
+            helm.pop(key, None)
             if not helm:
                 src.pop("helm", None)
 
@@ -661,9 +672,10 @@ async def preview_diff(
             src = _get_or_create_source(app_data)
             if "helm" not in src:
                 src["helm"] = {}
-            src["helm"]["valuesFiles"] = values_list
+            key = _values_key(src["helm"])
+            src["helm"][key] = values_list
         else:
-            data[app_name] = {"source": {"helm": {"valuesFiles": values_list}}}
+            data[app_name] = {"source": {"helm": {"valueFiles": values_list}}}
 
     if not data:
         after = "# No overrides - inherits from parent scope\n"
