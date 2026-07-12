@@ -84,19 +84,58 @@ async def get_structure() -> RepoStructure:
     )
 
 
+CATEGORY_KEYS = {"edgeApps", "hubApps", "edge-apps", "hub-apps"}
+
+
+def _flatten_apps(raw: dict) -> dict:
+    """
+    Flatten category-nested YAML into a flat app dict.
+    Handles both flat format (app directly at top level) and
+    category format (edgeApps/hubApps wrapping apps).
+    """
+    flat: dict = {}
+    for key, value in raw.items():
+        if not isinstance(value, dict):
+            continue
+        if key.lower().replace("-", "").replace("_", "") in {k.lower().replace("-", "") for k in CATEGORY_KEYS}:
+            for app_name, app_data in value.items():
+                if isinstance(app_data, dict):
+                    app_data["_category"] = key
+                    flat[app_name] = app_data
+        else:
+            if _get_source(value) is not None or "source" in value or "sources" in value:
+                flat[key] = value
+    return flat
+
+
+def _get_source(app_data: dict) -> dict | None:
+    """Get the source dict from an app, supporting both 'source' and 'sources'."""
+    src = app_data.get("source")
+    if isinstance(src, dict):
+        return src
+    src = app_data.get("sources")
+    if isinstance(src, dict):
+        return src
+    if isinstance(src, list) and src:
+        return src[0] if isinstance(src[0], dict) else None
+    return None
+
+
 async def _load_apps_file(path: str) -> dict:
-    """Load and parse an _apps.yaml or cluster yaml file."""
     s = get_settings()
     try:
         content = await get_file_content(s.github_spec_repo, path, s.github_spec_branch)
-        return parse_yaml(content)
+        raw = parse_yaml(content)
+        return _flatten_apps(raw)
     except Exception:
         return {}
 
 
 def _extract_values_files(app_data: dict) -> list[str] | None:
-    """Extract valuesFiles list from an app config, or None if not set."""
-    helm = app_data.get("source", {}).get("helm", {})
+    src = _get_source(app_data)
+    if not src:
+        return None
+    helm = src.get("helm", {})
     if not isinstance(helm, dict):
         return None
     vf = helm.get("valuesFiles")
@@ -108,13 +147,17 @@ def _extract_values_files(app_data: dict) -> list[str] | None:
 
 
 def _extract_target_revision(app_data: dict) -> str | None:
-    """Extract targetRevision from an app config, or None."""
-    return app_data.get("source", {}).get("targetRevision")
+    src = _get_source(app_data)
+    if not src:
+        return None
+    return src.get("targetRevision")
 
 
 def _extract_repo_url(app_data: dict) -> str | None:
-    """Extract repoURL from an app config, or None."""
-    return app_data.get("source", {}).get("repoURL")
+    src = _get_source(app_data)
+    if not src:
+        return None
+    return src.get("repoURL")
 
 
 async def get_apps_for_scope(
@@ -283,6 +326,33 @@ async def get_apps_for_scope(
     return ScopeApps(scope=scope_str, scope_type=scope_type, apps=apps)
 
 
+def _find_app_in_raw(data: dict, app_name: str) -> tuple[dict | None, str | None]:
+    """Find an app in raw YAML, checking both flat and category-nested structures.
+    Returns (app_dict, category_key) or (None, None)."""
+    if app_name in data and isinstance(data[app_name], dict):
+        return data[app_name], None
+    for cat_key in CATEGORY_KEYS:
+        if cat_key in data and isinstance(data[cat_key], dict):
+            if app_name in data[cat_key] and isinstance(data[cat_key][app_name], dict):
+                return data[cat_key][app_name], cat_key
+    for key, val in data.items():
+        if isinstance(val, dict) and app_name in val and isinstance(val[app_name], dict):
+            src = val[app_name].get("source") or val[app_name].get("sources")
+            if src:
+                return val[app_name], key
+    return None, None
+
+
+def _get_or_create_source(app_data: dict) -> dict:
+    """Get or create the source dict, supporting both 'source' and 'sources'."""
+    if "source" in app_data and isinstance(app_data["source"], dict):
+        return app_data["source"]
+    if "sources" in app_data and isinstance(app_data["sources"], dict):
+        return app_data["sources"]
+    app_data["source"] = {}
+    return app_data["source"]
+
+
 async def update_app_branch(
     file_path: str,
     app_name: str,
@@ -293,11 +363,11 @@ async def update_app_branch(
     content = await get_file_content(s.github_spec_repo, file_path, s.github_spec_branch)
     data = parse_yaml(content)
 
-    if app_name in data:
-        if "source" not in data[app_name]:
-            data[app_name]["source"] = {}
-        old_branch = data[app_name]["source"].get("targetRevision", "inherited")
-        data[app_name]["source"]["targetRevision"] = new_branch
+    app_data, _ = _find_app_in_raw(data, app_name)
+    if app_data:
+        src = _get_or_create_source(app_data)
+        old_branch = src.get("targetRevision", "inherited")
+        src["targetRevision"] = new_branch
     else:
         old_branch = "inherited"
         data[app_name] = {"source": {"targetRevision": new_branch}}
@@ -322,13 +392,13 @@ async def update_app_values(
     if not values_files:
         return await inherit_field(file_path, app_name, "valuesFiles", username=username)
 
-    if app_name in data:
-        if "source" not in data[app_name]:
-            data[app_name]["source"] = {}
-        if "helm" not in data[app_name]["source"]:
-            data[app_name]["source"]["helm"] = {}
-        old_values = data[app_name]["source"]["helm"].get("valuesFiles", [])
-        data[app_name]["source"]["helm"]["valuesFiles"] = values_files
+    app_data, _ = _find_app_in_raw(data, app_name)
+    if app_data:
+        src = _get_or_create_source(app_data)
+        if "helm" not in src:
+            src["helm"] = {}
+        old_values = src["helm"].get("valuesFiles", [])
+        src["helm"]["valuesFiles"] = values_files
     else:
         old_values = "inherited"
         data[app_name] = {"source": {"helm": {"valuesFiles": values_files}}}
@@ -350,25 +420,20 @@ async def inherit_field(
     content = await get_file_content(s.github_spec_repo, file_path, s.github_spec_branch)
     data = parse_yaml(content)
 
-    if app_name not in data:
+    app_data, cat_key = _find_app_in_raw(data, app_name)
+    if not app_data:
         raise ValueError(f"App '{app_name}' not found in {file_path}")
 
     removed_value = None
+    src = _get_source(app_data) or {}
 
     if field == "targetRevision":
-        source = data[app_name].get("source", {})
-        removed_value = source.pop("targetRevision", None)
-        if not source or source.keys() <= {"repoURL"}:
-            if "helm" not in source:
-                del data[app_name]
+        removed_value = src.pop("targetRevision", None)
     elif field == "valuesFiles":
-        helm = data[app_name].get("source", {}).get("helm", {})
+        helm = src.get("helm", {})
         removed_value = helm.pop("valuesFiles", None)
         if not helm:
-            data[app_name].get("source", {}).pop("helm", None)
-        source = data[app_name].get("source", {})
-        if not source or source.keys() <= {"repoURL"}:
-            del data[app_name]
+            src.pop("helm", None)
     else:
         raise ValueError(f"Unknown field: {field}")
 
@@ -565,45 +630,40 @@ async def preview_diff(
     if not data:
         return before, before
 
+    app_data, _ = _find_app_in_raw(data, app_name)
+
     if branch_action == "inherit":
-        if app_name in data:
-            source = data[app_name].get("source", {})
-            source.pop("targetRevision", None)
+        if app_data:
+            src = _get_source(app_data) or {}
+            src.pop("targetRevision", None)
     elif branch_action == "set" and branch_value is not None:
-        if app_name in data:
-            if "source" not in data[app_name]:
-                data[app_name]["source"] = {}
-            data[app_name]["source"]["targetRevision"] = branch_value
+        if app_data:
+            src = _get_or_create_source(app_data)
+            src["targetRevision"] = branch_value
         else:
             data[app_name] = {"source": {"targetRevision": branch_value}}
 
-    def _remove_values_from(d: dict) -> None:
-        if app_name in d:
-            helm = d[app_name].get("source", {}).get("helm", {})
+    def _remove_values() -> None:
+        if app_data:
+            src = _get_source(app_data) or {}
+            helm = src.get("helm", {})
             helm.pop("valuesFiles", None)
             if not helm:
-                d[app_name].get("source", {}).pop("helm", None)
+                src.pop("helm", None)
 
     if values_action == "inherit":
-        _remove_values_from(data)
+        _remove_values()
     elif values_action == "set" and values_value is not None:
         values_list = [v.strip() for v in values_value.split(",") if v.strip()]
         if not values_list:
-            _remove_values_from(data)
-        elif app_name in data:
-            if "source" not in data[app_name]:
-                data[app_name]["source"] = {}
-            if "helm" not in data[app_name]["source"]:
-                data[app_name]["source"]["helm"] = {}
-            data[app_name]["source"]["helm"]["valuesFiles"] = values_list
+            _remove_values()
+        elif app_data:
+            src = _get_or_create_source(app_data)
+            if "helm" not in src:
+                src["helm"] = {}
+            src["helm"]["valuesFiles"] = values_list
         else:
             data[app_name] = {"source": {"helm": {"valuesFiles": values_list}}}
-
-    if app_name in data:
-        source = data[app_name].get("source", {})
-        if not source or source.keys() <= {"repoURL"}:
-            if "helm" not in source:
-                del data[app_name]
 
     if not data:
         after = "# No overrides - inherits from parent scope\n"

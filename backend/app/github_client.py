@@ -69,8 +69,8 @@ async def _gl_get_tree(repo: str, branch: str) -> list[dict]:
     pid = _gl_project_id(repo)
     items: list[dict] = []
     page = 1
-    while True:
-        url = f"{s.github_api_url}/projects/{pid}/repository/tree?ref={branch}&recursive=true&per_page=100&page={page}"
+    while page <= 50:
+        url = f"{s.github_api_url}/projects/{pid}/repository/tree?ref={branch}&recursive=true&per_page=100&page={page}&pagination=keyset&order_by=path&sort=asc"
         data = await _get(url)
         if not data:
             break
