@@ -524,7 +524,6 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
       setShowDiff(false);
       setDiffBefore("");
       setDiffAfter("");
-      onUpdated();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Update failed");
     } finally {
@@ -861,6 +860,14 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
             onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
           >
             {undoing ? "Undoing..." : "Undo"}
+          </button>
+          <button
+            style={{ ...s.undoBtn, color: "var(--accent)" }}
+            onClick={() => { setResult(null); onUpdated(); }}
+            onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--accent-muted)")}
+            onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
+          >
+            Refresh
           </button>
           {undoResult && (
             <span style={{ fontSize: 11, color: undoResult.startsWith("Undo successful") ? "var(--success)" : "var(--danger)" }}>
