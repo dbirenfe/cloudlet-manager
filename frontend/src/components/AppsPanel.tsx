@@ -226,7 +226,7 @@ export default function AppsPanel({ flavor, env, cluster, onNavigate }: AppsPane
   const [addName, setAddName] = useState("");
   const [addRepoUrl, setAddRepoUrl] = useState("");
   const [addRevision, setAddRevision] = useState("main");
-  const [addValueFiles, setAddValueFiles] = useState("values.yaml");
+  const [addValueFiles, setAddValueFiles] = useState<string[]>(["values.yaml"]);
   const [addingApp, setAddingApp] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [addBranches, setAddBranches] = useState<string[]>([]);
@@ -238,7 +238,7 @@ export default function AppsPanel({ flavor, env, cluster, onNavigate }: AppsPane
     setAddBranches([]);
     setAddRevision("main");
     setAddValuesOptions([]);
-    setAddValueFiles("values.yaml");
+    setAddValueFiles(["values.yaml"]);
     if (!addRepoUrl.trim() || !addRepoUrl.startsWith("http")) return;
     const timer = setTimeout(() => {
       setAddBranchesLoading(true);
@@ -252,7 +252,7 @@ export default function AppsPanel({ flavor, env, cluster, onNavigate }: AppsPane
 
   useEffect(() => {
     setAddValuesOptions([]);
-    setAddValueFiles("values.yaml");
+    setAddValueFiles(["values.yaml"]);
     if (!addRepoUrl.trim() || !addRevision) return;
     setAddValuesLoading(true);
     fetchValuesFiles(addRepoUrl.trim(), addRevision)
@@ -298,14 +298,14 @@ export default function AppsPanel({ flavor, env, cluster, onNavigate }: AppsPane
         category: addCategory,
         repo_url: addRepoUrl.trim(),
         target_revision: addRevision.trim() || "main",
-        value_files: addValueFiles.split(",").map((v) => v.trim()).filter(Boolean),
+        value_files: addValueFiles.length > 0 ? addValueFiles : ["values.yaml"],
       };
       await addApp(req);
       setShowAddApp(false);
       setAddName("");
       setAddRepoUrl("");
       setAddRevision("main");
-      setAddValueFiles("values.yaml");
+      setAddValueFiles(["values.yaml"]);
       setRefreshKey((k) => k + 1);
     } catch (e) {
       setAddError(e instanceof Error ? e.message : "Failed to add app");
@@ -483,57 +483,71 @@ export default function AppsPanel({ flavor, env, cluster, onNavigate }: AppsPane
               />
             </div>
 
-            <div style={s.formGroup}>
-              <label style={s.formLabel}>
-                Target Revision
-                {addBranchesLoading && <span style={{ fontSize: 10, color: "var(--accent)", marginLeft: 8 }}>Loading...</span>}
-              </label>
-              {addBranches.length > 0 ? (
-                <select
-                  style={s.formSelect}
-                  value={addRevision}
-                  onChange={(e) => setAddRevision(e.target.value)}
-                >
-                  {addBranches.map((b) => (
-                    <option key={b} value={b}>{b}</option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  style={s.formInput}
-                  placeholder={addBranchesLoading ? "Loading branches..." : "Enter repo URL first"}
-                  value={addRevision}
-                  onChange={(e) => setAddRevision(e.target.value)}
-                  disabled={!addRepoUrl.trim()}
-                />
-              )}
-            </div>
+            {addBranchesLoading && (
+              <div style={{ fontSize: 12, color: "var(--accent)", padding: "8px 0" }}>
+                Loading branches...
+              </div>
+            )}
 
-            <div style={s.formGroup}>
-              <label style={s.formLabel}>
-                Value Files
-                {addValuesLoading && <span style={{ fontSize: 10, color: "var(--accent)", marginLeft: 8 }}>Loading...</span>}
-              </label>
-              {addValuesOptions.length > 0 ? (
-                <select
-                  style={s.formSelect}
-                  value={addValueFiles}
-                  onChange={(e) => setAddValueFiles(e.target.value)}
-                >
-                  {addValuesOptions.map((f) => (
-                    <option key={f} value={f}>{f}</option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  style={s.formInput}
-                  placeholder={addValuesLoading ? "Loading..." : "Select a branch first"}
-                  value={addValueFiles}
-                  onChange={(e) => setAddValueFiles(e.target.value)}
-                  disabled={!addRevision}
-                />
-              )}
-            </div>
+            {addBranches.length > 0 && (
+              <>
+                <div style={s.formGroup}>
+                  <label style={s.formLabel}>Target Revision</label>
+                  <select
+                    style={s.formSelect}
+                    value={addRevision}
+                    onChange={(e) => setAddRevision(e.target.value)}
+                  >
+                    {addBranches.map((b) => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={s.formGroup}>
+                  <label style={s.formLabel}>
+                    Value Files
+                    {addValuesLoading && <span style={{ fontSize: 10, color: "var(--accent)", marginLeft: 8 }}>Loading...</span>}
+                  </label>
+                  <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 6, marginBottom: 6 }}>
+                    {addValueFiles.map((vf, idx) => (
+                      <span key={`${vf}-${idx}`} style={{
+                        display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12,
+                        background: "var(--bg-input)", border: "1px solid var(--border)",
+                        borderRadius: 6, padding: "4px 8px", color: "var(--text-primary)",
+                      }}>
+                        {vf}
+                        <button
+                          onClick={() => setAddValueFiles((prev) => prev.filter((_, i) => i !== idx))}
+                          style={{
+                            background: "none", border: "none", color: "var(--text-muted)",
+                            cursor: "pointer", fontSize: 14, lineHeight: 1, padding: "0 2px",
+                          }}
+                        >&times;</button>
+                      </span>
+                    ))}
+                    {addValuesOptions.length > 0 && (
+                      <select
+                        style={{ ...s.formSelect, maxWidth: 200, fontSize: 12, padding: "4px 8px" }}
+                        value=""
+                        onChange={(e) => {
+                          if (e.target.value && !addValueFiles.includes(e.target.value)) {
+                            setAddValueFiles((prev) => [...prev, e.target.value]);
+                          }
+                        }}
+                      >
+                        <option value="">+ Add...</option>
+                        {addValuesOptions
+                          .filter((f) => !addValueFiles.includes(f))
+                          .map((f) => (
+                            <option key={f} value={f}>{f}</option>
+                          ))}
+                      </select>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
 
             {addError && (
               <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 10 }}>
