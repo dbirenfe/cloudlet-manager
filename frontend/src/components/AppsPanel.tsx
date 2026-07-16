@@ -1,6 +1,6 @@
 import { type CSSProperties, useEffect, useState } from "react";
 import type { ScopeApps, AddAppRequest } from "../api/client";
-import { fetchApps, addApp } from "../api/client";
+import { fetchApps, addApp, fetchBranches, fetchValuesFiles } from "../api/client";
 import AppCard from "./AppCard";
 
 interface AppsPanelProps {
@@ -229,6 +229,37 @@ export default function AppsPanel({ flavor, env, cluster, onNavigate }: AppsPane
   const [addValueFiles, setAddValueFiles] = useState("values.yaml");
   const [addingApp, setAddingApp] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [addBranches, setAddBranches] = useState<string[]>([]);
+  const [addBranchesLoading, setAddBranchesLoading] = useState(false);
+  const [addValuesOptions, setAddValuesOptions] = useState<string[]>([]);
+  const [addValuesLoading, setAddValuesLoading] = useState(false);
+
+  useEffect(() => {
+    setAddBranches([]);
+    setAddRevision("main");
+    setAddValuesOptions([]);
+    setAddValueFiles("values.yaml");
+    if (!addRepoUrl.trim() || !addRepoUrl.startsWith("http")) return;
+    const timer = setTimeout(() => {
+      setAddBranchesLoading(true);
+      fetchBranches(addRepoUrl.trim())
+        .then((d) => setAddBranches(d.branches))
+        .catch(() => setAddBranches([]))
+        .finally(() => setAddBranchesLoading(false));
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [addRepoUrl]);
+
+  useEffect(() => {
+    setAddValuesOptions([]);
+    setAddValueFiles("values.yaml");
+    if (!addRepoUrl.trim() || !addRevision) return;
+    setAddValuesLoading(true);
+    fetchValuesFiles(addRepoUrl.trim(), addRevision)
+      .then((d) => setAddValuesOptions(d.files))
+      .catch(() => setAddValuesOptions([]))
+      .finally(() => setAddValuesLoading(false));
+  }, [addRevision, addRepoUrl]);
 
   useEffect(() => {
     let cancelled = false;
@@ -453,23 +484,55 @@ export default function AppsPanel({ flavor, env, cluster, onNavigate }: AppsPane
             </div>
 
             <div style={s.formGroup}>
-              <label style={s.formLabel}>Target Revision</label>
-              <input
-                style={s.formInput}
-                placeholder="main"
-                value={addRevision}
-                onChange={(e) => setAddRevision(e.target.value)}
-              />
+              <label style={s.formLabel}>
+                Target Revision
+                {addBranchesLoading && <span style={{ fontSize: 10, color: "var(--accent)", marginLeft: 8 }}>Loading...</span>}
+              </label>
+              {addBranches.length > 0 ? (
+                <select
+                  style={s.formSelect}
+                  value={addRevision}
+                  onChange={(e) => setAddRevision(e.target.value)}
+                >
+                  {addBranches.map((b) => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  style={s.formInput}
+                  placeholder={addBranchesLoading ? "Loading branches..." : "Enter repo URL first"}
+                  value={addRevision}
+                  onChange={(e) => setAddRevision(e.target.value)}
+                  disabled={!addRepoUrl.trim()}
+                />
+              )}
             </div>
 
             <div style={s.formGroup}>
-              <label style={s.formLabel}>Value Files (comma-separated)</label>
-              <input
-                style={s.formInput}
-                placeholder="values.yaml"
-                value={addValueFiles}
-                onChange={(e) => setAddValueFiles(e.target.value)}
-              />
+              <label style={s.formLabel}>
+                Value Files
+                {addValuesLoading && <span style={{ fontSize: 10, color: "var(--accent)", marginLeft: 8 }}>Loading...</span>}
+              </label>
+              {addValuesOptions.length > 0 ? (
+                <select
+                  style={s.formSelect}
+                  value={addValueFiles}
+                  onChange={(e) => setAddValueFiles(e.target.value)}
+                >
+                  {addValuesOptions.map((f) => (
+                    <option key={f} value={f}>{f}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  style={s.formInput}
+                  placeholder={addValuesLoading ? "Loading..." : "Select a branch first"}
+                  value={addValueFiles}
+                  onChange={(e) => setAddValueFiles(e.target.value)}
+                  disabled={!addRevision}
+                />
+              )}
             </div>
 
             {addError && (
