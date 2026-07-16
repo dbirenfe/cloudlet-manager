@@ -451,6 +451,15 @@ async def inherit_field(
     else:
         raise ValueError(f"Unknown field: {field}")
 
+    meaningful = {k for k in src if k not in ("path", "repoURL")}
+    if not meaningful:
+        if cat_key and cat_key in data and app_name in data[cat_key]:
+            del data[cat_key][app_name]
+            if not data[cat_key]:
+                del data[cat_key]
+        elif app_name in data:
+            del data[app_name]
+
     if not data:
         new_content = "# No overrides - inherits from parent scope\n"
     else:
