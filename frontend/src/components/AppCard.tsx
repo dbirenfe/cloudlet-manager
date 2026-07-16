@@ -424,6 +424,7 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
   const [error, setError] = useState<string | null>(null);
 
   const [showConfirm, setShowConfirm] = useState(false);
+  const [applied, setApplied] = useState(false);
   const [undoing, setUndoing] = useState(false);
   const [undoResult, setUndoResult] = useState<string | null>(null);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
@@ -436,6 +437,7 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
   const [diffError, setDiffError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (applied) return;
     setSelectedBranch(branch_info.is_local ? branch_info.value : INHERIT_VALUE);
     setEditedValues(values_info.is_local ? [...values_info.values] : []);
     setValuesInherit(!values_info.is_local);
@@ -521,6 +523,7 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
       }
 
       setResult(lastResult);
+      setApplied(true);
       setShowDiff(false);
       setDiffBefore("");
       setDiffAfter("");
@@ -537,7 +540,7 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
     try {
       const res = await undoLastChange();
       setUndoResult(res.success ? "Undo successful" : `Undo failed: ${res.message}`);
-      if (res.success) onUpdated();
+      if (res.success) { setApplied(false); onUpdated(); }
     } catch (e) {
       setUndoResult(e instanceof Error ? e.message : "Undo failed");
     } finally {
@@ -863,7 +866,7 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
           </button>
           <button
             style={{ ...s.undoBtn, color: "var(--accent)" }}
-            onClick={() => { setResult(null); onUpdated(); }}
+            onClick={() => { setResult(null); setApplied(false); onUpdated(); }}
             onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--accent-muted)")}
             onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
           >
