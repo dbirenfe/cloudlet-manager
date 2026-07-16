@@ -439,7 +439,6 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
     setSelectedBranch(branch_info.is_local ? branch_info.value : INHERIT_VALUE);
     setEditedValues(values_info.is_local ? [...values_info.values] : []);
     setValuesInherit(!values_info.is_local);
-    setResult(null);
     setError(null);
   }, [app]);
 
@@ -672,7 +671,7 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
           <select
             style={s.select}
             value={selectedBranch}
-            onChange={(e) => setSelectedBranch(e.target.value)}
+            onChange={(e) => { setSelectedBranch(e.target.value); setResult(null); setUndoResult(null); }}
             onFocus={loadBranches}
           >
             {branch_info.parent_value !== null && (
