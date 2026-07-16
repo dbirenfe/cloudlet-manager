@@ -289,6 +289,90 @@ async def get_commits(repo: str, branch: str, limit: int = 50) -> list[dict]:
     return await _get(url)
 
 
+# ── Commit Detail ──
+
+async def get_commit_files(repo: str, sha: str) -> list[dict]:
+    s = get_settings()
+    if _is_gitlab():
+        pid = _gl_project_id(repo)
+        url = f"{s.github_api_url}/projects/{pid}/repository/commits/{sha}/diff"
+        diffs = await _get(url)
+        files = []
+        for d in diffs:
+            if d.get("new_file"):
+                status = "added"
+            elif d.get("deleted_file"):
+                status = "removed"
+            else:
+                status = "modified"
+            files.append({
+                "filename": d.get("new_path", d.get("old_path", "")),
+                "status": status,
+            })
+        return files
+    url = f"{s.github_api_url}/repos/{repo}/commits/{sha}"
+    data = await _get(url)
+    return data.get("files", [])
+
+
+# ── File Create / Delete ──
+
+async def create_file(repo: str, path: str, branch: str, content: str, message: str) -> dict:
+    s = get_settings()
+    if _is_gitlab():
+        pid = _gl_project_id(repo)
+        encoded_path = urlquote(path, safe="")
+        url = f"{s.github_api_url}/projects/{pid}/repository/files/{encoded_path}"
+        body = {
+            "branch": branch,
+            "content": content,
+            "commit_message": message,
+        }
+        result = await _post(url, body)
+        invalidate_content_cache(repo, path, branch)
+        return {"commit": {"html_url": ""}}
+
+    url = f"{s.github_api_url}/repos/{repo}/contents/{path}"
+    encoded = base64.b64encode(content.encode("utf-8")).decode("utf-8")
+    body = {
+        "message": message,
+        "content": encoded,
+        "branch": branch,
+    }
+    result = await _put(url, body)
+    invalidate_content_cache(repo, path, branch)
+    return result
+
+
+async def delete_file(repo: str, path: str, branch: str, message: str) -> dict:
+    s = get_settings()
+    if _is_gitlab():
+        pid = _gl_project_id(repo)
+        encoded_path = urlquote(path, safe="")
+        url = f"{s.github_api_url}/projects/{pid}/repository/files/{encoded_path}"
+        async with httpx.AsyncClient(timeout=30, verify=False) as client:
+            resp = await client.delete(url, headers=_headers(), json={
+                "branch": branch,
+                "commit_message": message,
+            })
+            resp.raise_for_status()
+        invalidate_content_cache(repo, path, branch)
+        return {"commit": {"html_url": ""}}
+
+    sha = await get_file_sha(repo, path, branch)
+    url = f"{s.github_api_url}/repos/{repo}/contents/{path}"
+    async with httpx.AsyncClient(timeout=30, verify=False) as client:
+        resp = await client.delete(url, headers=_headers(), json={
+            "message": message,
+            "sha": sha,
+            "branch": branch,
+        })
+        resp.raise_for_status()
+        result = resp.json()
+    invalidate_content_cache(repo, path, branch)
+    return result
+
+
 # ── URL Parsing ──
 
 def _parse_repo_url(url: str) -> str | None:

@@ -1,5 +1,20 @@
-import { type CSSProperties, useState } from "react";
+import { type CSSProperties, useState, useEffect, useCallback } from "react";
 import type { RepoStructure, ClusterInfo } from "../api/client";
+
+const PINNED_STORAGE_KEY = "cloudlet-pinned-clusters";
+
+function loadPinned(): string[] {
+  try {
+    const raw = localStorage.getItem(PINNED_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePinned(pins: string[]) {
+  localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify(pins));
+}
 
 interface SidebarProps {
   structure: RepoStructure | null;
@@ -57,6 +72,19 @@ function ServerIcon() {
       <rect x="2" y="9" width="12" height="5" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
       <circle cx="5" cy="4.5" r="0.75" fill="currentColor" />
       <circle cx="5" cy="11.5" r="0.75" fill="currentColor" />
+    </svg>
+  );
+}
+
+function StarIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill={filled ? "currentColor" : "none"} style={{ flexShrink: 0 }}>
+      <path
+        d="M8 1.5L9.8 5.7L14.3 6.2L11 9.3L11.8 13.8L8 11.6L4.2 13.8L5 9.3L1.7 6.2L6.2 5.7L8 1.5Z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -140,6 +168,32 @@ const st: Record<string, CSSProperties> = {
     padding: "1px 7px",
     marginLeft: "auto",
   },
+  pinBtn: {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    padding: 2,
+    display: "flex",
+    alignItems: "center",
+    color: "var(--text-muted)",
+    transition: "color 0.15s",
+    flexShrink: 0,
+  },
+  pinBtnActive: {
+    color: "var(--warning)",
+  },
+  pinnedCluster: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "7px 16px",
+    cursor: "pointer",
+    fontSize: 13,
+    color: "var(--text-secondary)",
+    transition: "all 0.12s",
+    borderLeft: "3px solid transparent",
+    userSelect: "none" as const,
+  },
 };
 
 function TreeRow({
@@ -183,6 +237,17 @@ export default function Sidebar({
 }: SidebarProps) {
   const [expandedFlavors, setExpandedFlavors] = useState<Set<string>>(new Set());
   const [expandedEnvs, setExpandedEnvs] = useState<Set<string>>(new Set());
+  const [pinned, setPinned] = useState<string[]>(loadPinned);
+
+  useEffect(() => {
+    savePinned(pinned);
+  }, [pinned]);
+
+  const togglePin = useCallback((key: string) => {
+    setPinned((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  }, []);
 
   if (!structure) {
     return (
@@ -234,6 +299,54 @@ export default function Sidebar({
         <GlobeIcon />
         All Clusters
       </div>
+
+      {pinned.length > 0 && (
+        <>
+          <div style={st.groupLabel}>Pinned</div>
+          {pinned.map((key) => {
+            const parts = key.split("/");
+            const pFlavor = parts[0];
+            const pEnv = parts[1];
+            const pCluster = parts.slice(2).join("/");
+            const isActive =
+              selectedFlavor === pFlavor &&
+              selectedEnv === pEnv &&
+              selectedCluster === pCluster;
+            return (
+              <div
+                key={`pin-${key}`}
+                style={{
+                  ...st.pinnedCluster,
+                  ...(isActive ? st.treeItemActive : {}),
+                }}
+                onClick={() => onSelect(pFlavor, pEnv, pCluster)}
+                onMouseEnter={(e) => {
+                  if (!isActive) (e.currentTarget as HTMLElement).style.background = "var(--bg-hover)";
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) (e.currentTarget as HTMLElement).style.background = "transparent";
+                }}
+              >
+                <ServerIcon />
+                <span style={{ flex: 1 }}>{pCluster}</span>
+                <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                  {pFlavor}/{pEnv}
+                </span>
+                <button
+                  style={{ ...st.pinBtn, ...st.pinBtnActive }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    togglePin(key);
+                  }}
+                  title="Unpin"
+                >
+                  <StarIcon filled />
+                </button>
+              </div>
+            );
+          })}
+        </>
+      )}
 
       <div style={st.groupLabel}>Flavors</div>
 
@@ -306,6 +419,8 @@ export default function Sidebar({
                           selectedFlavor === flavor &&
                           selectedEnv === env &&
                           selectedCluster === cl.name;
+                        const clusterKey = `${flavor}/${env}/${cl.name}`;
+                        const isPinned = pinned.includes(clusterKey);
                         return (
                           <TreeRow
                             key={cl.name}
@@ -315,7 +430,20 @@ export default function Sidebar({
                           >
                             <span style={{ width: 16 }} />
                             <ServerIcon />
-                            <span>{cl.name}</span>
+                            <span style={{ flex: 1 }}>{cl.name}</span>
+                            <button
+                              style={{
+                                ...st.pinBtn,
+                                ...(isPinned ? st.pinBtnActive : {}),
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                togglePin(clusterKey);
+                              }}
+                              title={isPinned ? "Unpin" : "Pin"}
+                            >
+                              <StarIcon filled={isPinned} />
+                            </button>
                           </TreeRow>
                         );
                       })}

@@ -2,15 +2,19 @@
 
 import asyncio
 import yaml
+import httpx
 from app.config import get_settings
 from app.github_client import (
     get_repo_tree,
     get_file_content,
     update_file,
+    create_file,
+    delete_file,
     list_branches,
     list_values_files,
     branch_exists,
     get_commits,
+    get_commit_files,
     parse_yaml,
 )
 from app.models import (
@@ -682,3 +686,131 @@ async def preview_diff(
     else:
         after = yaml.dump(data, default_flow_style=False, sort_keys=False)
     return before, after
+
+
+async def undo_last_commit(username: str = "unknown") -> dict:
+    s = get_settings()
+    commits = await get_commits(s.github_spec_repo, s.github_spec_branch, 2)
+    if len(commits) < 2:
+        raise ValueError("Not enough commit history to undo")
+
+    last_sha = commits[0]["sha"]
+    parent_sha = commits[1]["sha"]
+    last_message = commits[0].get("commit", {}).get("message", "unknown change")
+
+    files = await get_commit_files(s.github_spec_repo, last_sha)
+    if not files:
+        raise ValueError("No files changed in the last commit")
+
+    commit_url = ""
+    for f in files:
+        filename = f["filename"]
+        status = f.get("status", "modified")
+
+        if status == "added":
+            result = await delete_file(
+                s.github_spec_repo, filename, s.github_spec_branch,
+                f"[{username}] undo: revert '{last_message}'",
+            )
+        elif status == "removed":
+            parent_content = await get_file_content(
+                s.github_spec_repo, filename, parent_sha, use_cache=False,
+            )
+            result = await create_file(
+                s.github_spec_repo, filename, s.github_spec_branch,
+                parent_content,
+                f"[{username}] undo: revert '{last_message}'",
+            )
+        else:
+            parent_content = await get_file_content(
+                s.github_spec_repo, filename, parent_sha, use_cache=False,
+            )
+            result = await update_file(
+                s.github_spec_repo, filename, s.github_spec_branch,
+                parent_content,
+                f"[{username}] undo: revert '{last_message}'",
+            )
+
+        commit_url = result.get("commit", {}).get("html_url", "") or commit_url
+
+    return {"commit_url": commit_url, "reverted_message": last_message}
+
+
+async def add_app(
+    file_path: str,
+    app_name: str,
+    category: str,
+    repo_url: str,
+    target_revision: str = "main",
+    value_files: list[str] | None = None,
+    username: str = "unknown",
+) -> dict:
+    s = get_settings()
+    file_exists = True
+
+    try:
+        content = await get_file_content(
+            s.github_spec_repo, file_path, s.github_spec_branch, use_cache=False,
+        )
+        data = parse_yaml(content)
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            data = {}
+            file_exists = False
+        else:
+            raise
+
+    source: dict = {
+        "repoURL": repo_url,
+        "targetRevision": target_revision,
+    }
+    if value_files:
+        source["helm"] = {"valueFiles": value_files}
+
+    if category not in data:
+        data[category] = {}
+    data[category][app_name] = {"source": source}
+
+    new_content = yaml.dump(data, default_flow_style=False, sort_keys=False)
+    message = f"[{username}] add app {app_name} to {file_path}"
+
+    if file_exists:
+        return await update_file(
+            s.github_spec_repo, file_path, s.github_spec_branch, new_content, message,
+        )
+    return await create_file(
+        s.github_spec_repo, file_path, s.github_spec_branch, new_content, message,
+    )
+
+
+async def remove_app(
+    file_path: str,
+    app_name: str,
+    username: str = "unknown",
+) -> dict:
+    s = get_settings()
+    content = await get_file_content(
+        s.github_spec_repo, file_path, s.github_spec_branch, use_cache=False,
+    )
+    data = parse_yaml(content)
+
+    app_data, cat_key = _find_app_in_raw(data, app_name)
+    if not app_data:
+        raise ValueError(f"App '{app_name}' not found in {file_path}")
+
+    if cat_key:
+        del data[cat_key][app_name]
+        if not data[cat_key]:
+            del data[cat_key]
+    else:
+        del data[app_name]
+
+    if not data:
+        new_content = "# Empty - all apps removed\n"
+    else:
+        new_content = yaml.dump(data, default_flow_style=False, sort_keys=False)
+
+    message = f"[{username}] remove app {app_name} from {file_path}"
+    return await update_file(
+        s.github_spec_repo, file_path, s.github_spec_branch, new_content, message,
+    )

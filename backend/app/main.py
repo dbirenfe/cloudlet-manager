@@ -19,6 +19,10 @@ from app.models import (
     BulkUpdateResponse,
     DiffPreviewRequest,
     DiffPreviewResponse,
+    UndoRequest,
+    UndoResponse,
+    AddAppRequest,
+    RemoveAppRequest,
 )
 from app.spec_service import (
     get_structure,
@@ -30,6 +34,9 @@ from app.spec_service import (
     search_all_apps,
     bulk_update,
     preview_diff,
+    undo_last_commit,
+    add_app,
+    remove_app,
 )
 from app.github_client import list_branches, list_values_files
 
@@ -218,6 +225,70 @@ async def preview_diff_endpoint(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate diff: {e}")
+
+
+@app.post("/api/undo", response_model=UndoResponse)
+async def undo(
+    req: UndoRequest,
+    user: dict = Depends(get_current_user),
+):
+    try:
+        username = user.get("preferred_username", "unknown")
+        result = await undo_last_commit(username=username)
+        return UndoResponse(
+            success=True,
+            message=f"Reverted: {result['reverted_message']}",
+            commit_url=result.get("commit_url", ""),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to undo: {e}")
+
+
+@app.post("/api/add-app", response_model=UpdateResponse)
+async def add_app_endpoint(
+    req: AddAppRequest,
+    user: dict = Depends(get_current_user),
+):
+    try:
+        username = user.get("preferred_username", "unknown")
+        result = await add_app(
+            req.file_path, req.app_name, req.category, req.repo_url,
+            target_revision=req.target_revision,
+            value_files=req.value_files,
+            username=username,
+        )
+        commit_url = result.get("commit", {}).get("html_url", "")
+        return UpdateResponse(
+            success=True,
+            message=f"App {req.app_name} added by {username}",
+            commit_url=commit_url,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to add app: {e}")
+
+
+@app.post("/api/remove-app", response_model=UpdateResponse)
+async def remove_app_endpoint(
+    req: RemoveAppRequest,
+    user: dict = Depends(get_current_user),
+):
+    try:
+        username = user.get("preferred_username", "unknown")
+        result = await remove_app(req.file_path, req.app_name, username=username)
+        commit_url = result.get("commit", {}).get("html_url", "")
+        return UpdateResponse(
+            success=True,
+            message=f"App {req.app_name} removed by {username}",
+            commit_url=commit_url,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to remove app: {e}")
 
 
 @app.get("/api/auth/config")

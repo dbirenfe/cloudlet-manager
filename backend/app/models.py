@@ -154,3 +154,27 @@ class DiffPreviewRequest(BaseModel):
 class DiffPreviewResponse(BaseModel):
     before: str
     after: str
+
+
+class UndoRequest(BaseModel):
+    commit_sha: str | None = None
+
+
+class UndoResponse(BaseModel):
+    success: bool
+    message: str
+    commit_url: str | None = None
+
+
+class AddAppRequest(BaseModel):
+    file_path: str
+    app_name: str
+    category: str
+    repo_url: str
+    target_revision: str = "main"
+    value_files: list[str] | None = None
+
+
+class RemoveAppRequest(BaseModel):
+    file_path: str
+    app_name: str

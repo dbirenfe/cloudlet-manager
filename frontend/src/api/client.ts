@@ -250,6 +250,30 @@ export interface DiffPreviewResponse {
   after: string;
 }
 
+export async function undoLastChange(): Promise<UpdateResponse> {
+  return request<UpdateResponse>("/api/undo", { method: "POST", body: JSON.stringify({}) });
+}
+
+export interface AddAppRequest {
+  file_path: string;
+  app_name: string;
+  category: string;
+  repo_url: string;
+  target_revision: string;
+  value_files: string[];
+}
+
+export async function addApp(req: AddAppRequest): Promise<UpdateResponse> {
+  return request<UpdateResponse>("/api/add-app", { method: "POST", body: JSON.stringify(req) });
+}
+
+export async function removeApp(filePath: string, appName: string): Promise<UpdateResponse> {
+  return request<UpdateResponse>("/api/remove-app", {
+    method: "POST",
+    body: JSON.stringify({ file_path: filePath, app_name: appName }),
+  });
+}
+
 export async function previewDiff(
   filePath: string,
   appName: string,

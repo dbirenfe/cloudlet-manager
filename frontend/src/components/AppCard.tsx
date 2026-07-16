@@ -7,7 +7,19 @@ import {
   updateValuesFiles,
   inheritField,
   previewDiff,
+  undoLastChange,
+  removeApp,
 } from "../api/client";
+
+function TrashIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <path d="M3 4H13" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M6 2H10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M4 4L5 14H11L12 4" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 interface AppCardProps {
   app: AppConfig;
@@ -282,6 +294,90 @@ const s: Record<string, CSSProperties> = {
     borderColor: "var(--accent)",
     fontWeight: 600,
   },
+  confirmOverlay: {
+    position: "fixed" as const,
+    inset: 0,
+    background: "rgba(0,0,0,0.6)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 500,
+  },
+  confirmModal: {
+    background: "var(--bg-secondary)",
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius-lg)",
+    width: 420,
+    padding: 24,
+    boxShadow: "var(--shadow)",
+  },
+  confirmTitle: {
+    fontSize: 16,
+    fontWeight: 700,
+    color: "var(--text-primary)",
+    marginBottom: 12,
+  },
+  confirmSummary: {
+    fontSize: 13,
+    color: "var(--text-secondary)",
+    background: "var(--bg-input)",
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius)",
+    padding: "10px 14px",
+    marginBottom: 18,
+    lineHeight: 1.6,
+  },
+  confirmActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 10,
+  },
+  cancelBtn: {
+    padding: "8px 16px",
+    background: "transparent",
+    color: "var(--text-secondary)",
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius)",
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: "pointer",
+    transition: "background 0.15s",
+  },
+  confirmBtn: {
+    padding: "8px 16px",
+    background: "var(--accent)",
+    color: "#fff",
+    border: "none",
+    borderRadius: "var(--radius)",
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
+    transition: "background 0.15s",
+  },
+  undoBtn: {
+    padding: "4px 10px",
+    background: "transparent",
+    color: "var(--warning)",
+    border: "1px solid var(--warning)",
+    borderRadius: "var(--radius)",
+    fontSize: 11,
+    fontWeight: 500,
+    cursor: "pointer",
+    marginLeft: 8,
+    transition: "background 0.15s",
+  },
+  removeBtn: {
+    background: "none",
+    border: "none",
+    color: "var(--text-muted)",
+    cursor: "pointer",
+    padding: 4,
+    borderRadius: "var(--radius)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transition: "color 0.15s, background 0.15s",
+  },
 };
 
 function BranchIcon() {
@@ -326,6 +422,12 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
   const [updating, setUpdating] = useState(false);
   const [result, setResult] = useState<UpdateResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [undoing, setUndoing] = useState(false);
+  const [undoResult, setUndoResult] = useState<string | null>(null);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   const [showDiff, setShowDiff] = useState(false);
   const [diffBefore, setDiffBefore] = useState("");
@@ -388,11 +490,17 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
 
   const hasAnyChange = isBranchChanged || isValuesChanged;
 
-  const handleApply = async () => {
+  const handleApplyClick = () => {
     if (!hasAnyChange) return;
+    setShowConfirm(true);
+  };
+
+  const handleConfirmApply = async () => {
+    setShowConfirm(false);
     setUpdating(true);
     setError(null);
     setResult(null);
+    setUndoResult(null);
 
     try {
       let lastResult: UpdateResponse | null = null;
@@ -422,6 +530,33 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
       setError(e instanceof Error ? e.message : "Update failed");
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleUndo = async () => {
+    setUndoing(true);
+    setUndoResult(null);
+    try {
+      const res = await undoLastChange();
+      setUndoResult(res.success ? "Undo successful" : `Undo failed: ${res.message}`);
+      if (res.success) onUpdated();
+    } catch (e) {
+      setUndoResult(e instanceof Error ? e.message : "Undo failed");
+    } finally {
+      setUndoing(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    setRemoving(true);
+    setShowRemoveConfirm(false);
+    try {
+      await removeApp(scopeFile, app.name);
+      onUpdated();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Remove failed");
+    } finally {
+      setRemoving(false);
     }
   };
 
@@ -485,7 +620,7 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
     : editedValues;
 
   return (
-    <div style={{ ...s.card, ...(hasWarning ? s.cardWarning : {}) }}>
+    <div style={{ ...s.card, ...(hasWarning ? s.cardWarning : {}), opacity: removing ? 0.5 : 1 }}>
       <div style={s.topRow}>
         <div style={s.appName}>
           {app.name}
@@ -493,6 +628,21 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
             <span style={s.warningBadge}>Branch not found</span>
           )}
         </div>
+        <button
+          style={s.removeBtn}
+          title={`Remove ${app.name}`}
+          onClick={() => setShowRemoveConfirm(true)}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.color = "var(--danger)";
+            (e.currentTarget as HTMLElement).style.background = "var(--danger-bg)";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.color = "var(--text-muted)";
+            (e.currentTarget as HTMLElement).style.background = "none";
+          }}
+        >
+          <TrashIcon />
+        </button>
       </div>
 
       <div style={s.meta}>
@@ -642,7 +792,7 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
             ...(!hasAnyChange || updating ? s.applyBtnDisabled : {}),
           }}
           disabled={!hasAnyChange || updating}
-          onClick={handleApply}
+          onClick={handleApplyClick}
           onMouseEnter={(e) => {
             if (hasAnyChange && !updating)
               (e.currentTarget as HTMLElement).style.background = "var(--accent-hover)";
@@ -692,8 +842,8 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
       )}
 
       {result && (
-        <div style={s.successMsg}>
-          Updated successfully.{" "}
+        <div style={{ ...s.successMsg, display: "flex", alignItems: "center", flexWrap: "wrap" as const, gap: 4 }}>
+          <span>Updated successfully.</span>
           {result.commit_url && (
             <a
               href={result.commit_url}
@@ -703,6 +853,20 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
             >
               View commit
             </a>
+          )}
+          <button
+            style={s.undoBtn}
+            onClick={handleUndo}
+            disabled={undoing}
+            onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--warning-bg)")}
+            onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
+          >
+            {undoing ? "Undoing..." : "Undo"}
+          </button>
+          {undoResult && (
+            <span style={{ fontSize: 11, color: undoResult.startsWith("Undo successful") ? "var(--success)" : "var(--danger)" }}>
+              {undoResult}
+            </span>
           )}
         </div>
       )}
@@ -717,6 +881,80 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
           </span>
         )}
       </div>
+
+      {showConfirm && (
+        <div
+          style={s.confirmOverlay}
+          onClick={(e) => e.target === e.currentTarget && setShowConfirm(false)}
+        >
+          <div style={s.confirmModal}>
+            <div style={s.confirmTitle}>Are you sure you want to apply these changes?</div>
+            <div style={s.confirmSummary}>
+              <strong>{app.name}</strong>
+              {isBranchChanged && (
+                <div>
+                  Branch: {selectedBranch === INHERIT_VALUE ? "inherit from parent" : selectedBranch}
+                </div>
+              )}
+              {isValuesChanged && (
+                <div>
+                  Values: {valuesInherit ? "inherit from parent" : `[${editedValues.join(", ")}]`}
+                </div>
+              )}
+            </div>
+            <div style={s.confirmActions}>
+              <button
+                style={s.cancelBtn}
+                onClick={() => setShowConfirm(false)}
+                onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--bg-hover)")}
+                onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
+              >
+                Cancel
+              </button>
+              <button
+                style={s.confirmBtn}
+                onClick={handleConfirmApply}
+                onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--accent-hover)")}
+                onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--accent)")}
+              >
+                Confirm & Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRemoveConfirm && (
+        <div
+          style={s.confirmOverlay}
+          onClick={(e) => e.target === e.currentTarget && setShowRemoveConfirm(false)}
+        >
+          <div style={s.confirmModal}>
+            <div style={s.confirmTitle}>Remove {app.name} from this scope?</div>
+            <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 18 }}>
+              This will remove the app definition from <span style={{ fontFamily: "monospace", color: "var(--text-primary)" }}>{scopeFile}</span>.
+            </div>
+            <div style={s.confirmActions}>
+              <button
+                style={s.cancelBtn}
+                onClick={() => setShowRemoveConfirm(false)}
+                onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--bg-hover)")}
+                onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
+              >
+                Cancel
+              </button>
+              <button
+                style={{ ...s.confirmBtn, background: "var(--danger)" }}
+                onClick={handleRemove}
+                onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#dc2626")}
+                onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--danger)")}
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showDiff && (
         <div
