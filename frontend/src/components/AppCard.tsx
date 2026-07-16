@@ -489,7 +489,7 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
   const isValuesChanged = valuesInherit !== wasValuesInherited
     || (!valuesInherit && JSON.stringify(editedValues) !== JSON.stringify(values_info.values));
 
-  const hasAnyChange = isBranchChanged || isValuesChanged;
+  const hasAnyChange = applied ? false : (isBranchChanged || isValuesChanged);
 
   const handleApplyClick = () => {
     if (!hasAnyChange) return;
@@ -673,7 +673,7 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
           <select
             style={s.select}
             value={selectedBranch}
-            onChange={(e) => { setSelectedBranch(e.target.value); setResult(null); setUndoResult(null); }}
+            onChange={(e) => { setSelectedBranch(e.target.value); setApplied(false); setResult(null); setUndoResult(null); }}
             onFocus={loadBranches}
           >
             {branch_info.parent_value !== null && (
