@@ -1,4 +1,4 @@
-# Cloudlet Manager — Helm Chart v2.0.0
+# Cloudlet Manager — Helm Chart v3.0.0
 
 GitOps branch management dashboard for ArgoCD-managed clusters.
 
@@ -21,6 +21,11 @@ Browse clusters by flavor/env, see which apps use which branches, swap branches,
 | **Audit log** | Timeline of all changes with who, what, when, and commit links |
 | **SSO (RHBK)** | OAuth2 Proxy sidecar with Keycloak OIDC, group-based access control |
 | **User display** | Shows logged-in username in header, includes it in commit messages |
+| **Confirm & Undo** | Confirmation dialog before applying changes, undo button to revert the last commit |
+| **Add/Remove apps** | Add new apps to a scope or remove existing ones via the UI |
+| **Pin clusters** | Star/pin frequently used clusters to the top of the sidebar (persisted in browser) |
+| **GitLab support** | Works with both GitHub/Gitea and GitLab APIs |
+| **Category YAML** | Supports `edgeApps`/`hubApps` category-nested YAML format |
 
 ---
 
@@ -66,8 +71,8 @@ Three images need to be in your internal registry:
 
 | Image | Source | Tag |
 |---|---|---|
-| `cloudlet-manager/backend` | Built from `backend/Dockerfile` | `2.0.0` |
-| `cloudlet-manager/frontend` | Built from `frontend/Dockerfile` | `2.0.0` |
+| `cloudlet-manager/backend` | Built from `backend/Dockerfile` | `3.0.0` |
+| `cloudlet-manager/frontend` | Built from `frontend/Dockerfile` | `3.0.0` |
 | `oauth2-proxy/oauth2-proxy` | `quay.io/oauth2-proxy/oauth2-proxy` | `v7.7.1` |
 
 **Important:** Build with `--platform linux/amd64` if building on Apple Silicon.
@@ -76,12 +81,12 @@ Three images need to be in your internal registry:
 
 ```bash
 # Backend
-podman build --platform linux/amd64 -t registry.internal/cloudlet-manager/backend:2.0.0 backend/
-podman push registry.internal/cloudlet-manager/backend:2.0.0
+podman build --platform linux/amd64 -t registry.internal/cloudlet-manager/backend:3.0.0 backend/
+podman push registry.internal/cloudlet-manager/backend:3.0.0
 
 # Frontend
-podman build --platform linux/amd64 -t registry.internal/cloudlet-manager/frontend:2.0.0 frontend/
-podman push registry.internal/cloudlet-manager/frontend:2.0.0
+podman build --platform linux/amd64 -t registry.internal/cloudlet-manager/frontend:3.0.0 frontend/
+podman push registry.internal/cloudlet-manager/frontend:3.0.0
 
 # OAuth2 Proxy (pull, retag, push)
 podman pull quay.io/oauth2-proxy/oauth2-proxy:v7.7.1
@@ -92,8 +97,8 @@ podman push registry.internal/oauth2-proxy/oauth2-proxy:v7.7.1
 ### Offline transfer (no network to registry)
 
 ```bash
-podman save -o cloudlet-backend.tar registry.internal/cloudlet-manager/backend:2.0.0
-podman save -o cloudlet-frontend.tar registry.internal/cloudlet-manager/frontend:2.0.0
+podman save -o cloudlet-backend.tar registry.internal/cloudlet-manager/backend:3.0.0
+podman save -o cloudlet-frontend.tar registry.internal/cloudlet-manager/frontend:3.0.0
 podman save -o oauth2-proxy.tar registry.internal/oauth2-proxy/oauth2-proxy:v7.7.1
 # Transfer tars, then: podman load -i <file>.tar && podman push ...
 ```
@@ -193,9 +198,9 @@ oc get route cloudlet-manager -n cloudlet-manager
 | `namespace` | Namespace to deploy into | `cloudlet-manager` |
 | **Images** | | |
 | `backend.image.repository` | Backend image path | `""` (required) |
-| `backend.image.tag` | Backend image tag | `2.0.0` |
+| `backend.image.tag` | Backend image tag | `3.0.0` |
 | `frontend.image.repository` | Frontend image path | `""` (required) |
-| `frontend.image.tag` | Frontend image tag | `2.0.0` |
+| `frontend.image.tag` | Frontend image tag | `3.0.0` |
 | `oauthProxy.image.repository` | OAuth2 Proxy image path | `""` (required if SSO) |
 | `oauthProxy.image.tag` | OAuth2 Proxy image tag | `v7.7.1` |
 | `imagePullSecret` | Registry pull secret name | `""` |

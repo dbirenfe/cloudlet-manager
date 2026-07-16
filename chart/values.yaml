@@ -12,7 +12,7 @@ backend:
   # -- Container image for the backend
   image:
     repository: ""   # e.g. registry.internal.example.com/cloudlet-manager/backend
-    tag: "latest"
+    tag: "3.0.0"
     pullPolicy: IfNotPresent
   replicas: 1
   resources:
@@ -28,7 +28,7 @@ frontend:
   # -- Container image for the frontend
   image:
     repository: ""   # e.g. registry.internal.example.com/cloudlet-manager/frontend
-    tag: "latest"
+    tag: "3.0.0"
     pullPolicy: IfNotPresent
   replicas: 1
   resources:
@@ -43,7 +43,7 @@ frontend:
 oauthProxy:
   image:
     repository: ""   # e.g. registry.internal.example.com/oauth2-proxy/oauth2-proxy
-    tag: "latest"
+    tag: "v7.7.1"
     pullPolicy: IfNotPresent
   resources:
     requests:
