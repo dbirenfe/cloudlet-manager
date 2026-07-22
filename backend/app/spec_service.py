@@ -624,6 +624,21 @@ async def search_all_apps(query: str, field: str = "branch") -> list[SearchResul
                         missing_checks.append((app_name, tr, repo_url, path, network, flavor, env, cluster))
                 continue
 
+            if q in app_name.lower():
+                results.append(
+                    SearchResult(
+                        app_name=app_name,
+                        field_matched="appName",
+                        value=app_name,
+                        file_path=path,
+                        network=network,
+                        flavor=flavor,
+                        env=env,
+                        cluster=cluster,
+                    )
+                )
+                continue
+
             if field == "branch":
                 tr = _extract_target_revision(app_data)
                 if tr and q in tr.lower():

@@ -342,7 +342,7 @@ export default function Header({ activeView, onViewChange, onSearchNavigate, use
           </div>
           <input
             style={styles.searchInput}
-            placeholder={searching ? "Searching..." : "Search apps, branches, values..."}
+            placeholder={searching ? "Searching..." : "Search across all clusters..."}
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
