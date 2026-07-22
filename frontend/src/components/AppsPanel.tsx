@@ -92,6 +92,7 @@ const s: Record<string, CSSProperties> = {
   grid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))",
+    maxWidth: 1200,
     gap: 12,
   },
   toolbar: {
