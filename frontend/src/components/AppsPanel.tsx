@@ -597,7 +597,7 @@ export default function AppsPanel({ network, flavor, env, cluster, onNavigate, s
                 {warningCount}
               </span>
               <span style={s.statLabel}>
-                Missing Branches {showMissingOnly && "(filtered)"}
+                Missing Branches
               </span>
             </div>
           </div>
