@@ -34,9 +34,8 @@ const s: Record<string, CSSProperties> = {
     background: "var(--bg-card)",
     border: "1px solid var(--border)",
     borderRadius: "var(--radius-lg)",
-    padding: 14,
+    padding: 16,
     transition: "border-color 0.2s, box-shadow 0.2s",
-    fontSize: 12,
   },
   cardWarning: {
     borderColor: "var(--warning)",
