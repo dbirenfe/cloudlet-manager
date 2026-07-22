@@ -36,6 +36,7 @@ button:focus, button:focus-visible {
 
 body {
   font-family: var(--font);
+  font-size: 14px;
   background: var(--bg-primary);
   color: var(--text-primary);
   min-height: 100vh;
