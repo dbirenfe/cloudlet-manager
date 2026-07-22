@@ -110,6 +110,7 @@ const s: Record<string, CSSProperties> = {
     transition: "all 0.12s",
     background: "transparent",
     color: "var(--text-secondary)",
+    outline: "none",
   },
   filterBtnActive: {
     background: "var(--accent-muted)",
