@@ -76,6 +76,7 @@ const s: Record<string, CSSProperties> = {
     padding: "12px 20px",
     display: "flex",
     flexDirection: "column" as const,
+    alignItems: "center" as const,
     gap: 2,
   },
   statValue: {
