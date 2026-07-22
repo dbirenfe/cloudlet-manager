@@ -396,7 +396,7 @@ export default function AppsPanel({ network, flavor, env, cluster, onNavigate, s
             <div key={stat.label} style={{
               background: "var(--bg-card)", border: "1px solid var(--border)",
               borderRadius: "var(--radius-lg)", padding: "20px 18px",
-              display: "flex", flexDirection: "column" as const, gap: 4,
+              display: "flex", flexDirection: "column" as const, alignItems: "center" as const, gap: 4,
             }}>
               <span style={{ fontSize: 28, fontWeight: 700, color: stat.color }}>{stat.value}</span>
               <span style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>
