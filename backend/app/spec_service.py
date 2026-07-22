@@ -242,7 +242,10 @@ async def get_apps_for_scope(
     """
     layers: list[tuple[str, str]] = []
 
-    layers.append(("root", APPS_FILENAME))
+    if network:
+        layers.append(("network", f"{network}/{APPS_FILENAME}"))
+    else:
+        layers.append(("root", APPS_FILENAME))
     if network and flavor:
         layers.append(("flavor", f"{network}/{flavor}/{APPS_FILENAME}"))
     elif flavor:
