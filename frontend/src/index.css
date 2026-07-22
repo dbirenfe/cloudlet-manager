@@ -30,6 +30,10 @@
   box-sizing: border-box;
 }
 
+button:focus, button:focus-visible {
+  outline: none;
+}
+
 body {
   font-family: var(--font);
   background: var(--bg-primary);
