@@ -312,6 +312,8 @@ async def get_apps_for_scope(
         scope_type = "env"
     elif flavor:
         scope_type = "flavor"
+    elif network:
+        scope_type = "network"
 
     apps: list[AppConfig] = []
     branch_checks = []
