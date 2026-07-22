@@ -155,18 +155,17 @@ const s: Record<string, CSSProperties> = {
     fontSize: 15,
   },
   addBtn: {
-    padding: "8px 16px",
+    padding: "5px 12px",
     background: "var(--accent-muted)",
     color: "var(--accent)",
     border: "1px solid transparent",
-    borderRadius: "var(--radius)",
+    borderRadius: 6,
     fontSize: 12,
     fontWeight: 600,
     cursor: "pointer",
     transition: "all 0.15s",
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
+    outline: "none",
+    whiteSpace: "nowrap" as const,
   },
   modalOverlay: {
     position: "fixed" as const,
@@ -588,26 +587,6 @@ export default function AppsPanel({ network, flavor, env, cluster, onNavigate, s
               </span>
               <span style={s.statLabel}>Missing Branches</span>
             </div>
-            <button
-              style={s.addBtn}
-              onClick={() => setShowAddApp(true)}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor = "var(--accent)";
-                (e.currentTarget as HTMLElement).style.background = "var(--accent)";
-                (e.currentTarget as HTMLElement).style.color = "#fff";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor = "transparent";
-                (e.currentTarget as HTMLElement).style.background = "var(--accent-muted)";
-                (e.currentTarget as HTMLElement).style.color = "var(--accent)";
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <path d="M8 3V13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                <path d="M3 8H13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-              Add App
-            </button>
           </div>
 
           {data.apps.length === 0 ? (
@@ -644,6 +623,22 @@ export default function AppsPanel({ network, flavor, env, cluster, onNavigate, s
                   value={scopeSearch}
                   onChange={(e) => setScopeSearch(e.target.value)}
                 />
+                <button
+                  style={s.addBtn}
+                  onClick={() => setShowAddApp(true)}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.borderColor = "var(--accent)";
+                    (e.currentTarget as HTMLElement).style.background = "var(--accent)";
+                    (e.currentTarget as HTMLElement).style.color = "#fff";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.borderColor = "transparent";
+                    (e.currentTarget as HTMLElement).style.background = "var(--accent-muted)";
+                    (e.currentTarget as HTMLElement).style.color = "var(--accent)";
+                  }}
+                >
+                  + Add App
+                </button>
               </div>
               <div style={s.grid}>
                 {data.apps
