@@ -264,6 +264,7 @@ export default function AppsPanel({ network, flavor, env, cluster, onNavigate, s
   const [refreshKey, setRefreshKey] = useState(0);
   const [categoryFilter, setCategoryFilter] = useState<"all" | "edgeApps" | "hubApps">("all");
   const [scopeSearch, setScopeSearch] = useState("");
+  const [showMissingOnly, setShowMissingOnly] = useState(false);
   const [showAddApp, setShowAddApp] = useState(false);
   const [addCategory, setAddCategory] = useState("edgeApps");
   const [addName, setAddName] = useState("");
@@ -310,6 +311,7 @@ export default function AppsPanel({ network, flavor, env, cluster, onNavigate, s
     setError(null);
     setCategoryFilter("all");
     setScopeSearch("");
+    setShowMissingOnly(false);
 
     fetchApps(network ?? undefined, flavor ?? undefined, env ?? undefined, cluster ?? undefined)
       .then((d) => {
@@ -576,7 +578,16 @@ export default function AppsPanel({ network, flavor, env, cluster, onNavigate, s
               <span style={s.statValue}>{data.apps.length}</span>
               <span style={s.statLabel}>Apps</span>
             </div>
-            <div style={s.stat}>
+            <div
+              style={{
+                ...s.stat,
+                cursor: warningCount > 0 ? "pointer" : "default",
+                border: showMissingOnly ? "1px solid var(--warning)" : "1px solid var(--border)",
+                background: showMissingOnly ? "var(--warning-bg)" : "var(--bg-card)",
+                transition: "all 0.12s",
+              }}
+              onClick={() => warningCount > 0 && setShowMissingOnly((v) => !v)}
+            >
               <span
                 style={{
                   ...s.statValue,
@@ -585,7 +596,9 @@ export default function AppsPanel({ network, flavor, env, cluster, onNavigate, s
               >
                 {warningCount}
               </span>
-              <span style={s.statLabel}>Missing Branches</span>
+              <span style={s.statLabel}>
+                Missing Branches {showMissingOnly && "(filtered)"}
+              </span>
             </div>
           </div>
 
@@ -643,6 +656,7 @@ export default function AppsPanel({ network, flavor, env, cluster, onNavigate, s
               <div style={s.grid}>
                 {data.apps
                   .filter((app) => categoryFilter === "all" || app.category === categoryFilter)
+                  .filter((app) => !showMissingOnly || app.branch_exists === false)
                   .filter((app) => !scopeSearch.trim() || app.name.toLowerCase().includes(scopeSearch.toLowerCase()))
                   .map((app) => (
                     <AppCard
