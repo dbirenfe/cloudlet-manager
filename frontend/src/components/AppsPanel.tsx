@@ -93,7 +93,6 @@ const s: Record<string, CSSProperties> = {
   grid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))",
-    maxWidth: 1200,
     gap: 12,
   },
   toolbar: {
@@ -620,7 +619,7 @@ export default function AppsPanel({ network, flavor, env, cluster, onNavigate, s
               </span>
             </div>
           ) : (
-            <>
+            <div style={{ maxWidth: 1200 }}>
               <div style={s.toolbar}>
                 {(["all", "edgeApps", "hubApps"] as const).map((f) => (
                   <button
@@ -676,7 +675,7 @@ export default function AppsPanel({ network, flavor, env, cluster, onNavigate, s
                     />
                   ))}
               </div>
-            </>
+            </div>
           )}
         </>
       )}
