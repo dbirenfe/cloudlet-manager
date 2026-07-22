@@ -307,6 +307,8 @@ export default function AppsPanel({ network, flavor, env, cluster, onNavigate }:
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setCategoryFilter("all");
+    setScopeSearch("");
 
     fetchApps(network ?? undefined, flavor ?? undefined, env ?? undefined, cluster ?? undefined)
       .then((d) => {
