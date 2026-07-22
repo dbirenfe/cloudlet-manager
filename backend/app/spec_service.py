@@ -35,13 +35,21 @@ SKIP_DIRS = {".git", ".github"}
 
 
 async def get_structure() -> RepoStructure:
-    """Scan the repo tree and return the full structure of flavors, envs, and clusters."""
+    """Scan the repo tree and return the full structure of networks, flavors, envs, and clusters."""
     s = get_settings()
     tree = await get_repo_tree(s.github_spec_repo, s.github_spec_branch)
 
-    flavors: set[str] = set()
+    networks: set[str] = set()
+    flavors: dict[str, set[str]] = {}
     environments: dict[str, list[str]] = {}
     clusters: dict[str, list[ClusterInfo]] = {}
+
+    has_apps_yaml: set[str] = set()
+    for item in tree:
+        if item["type"] == "blob" and item["path"].endswith(APPS_FILENAME):
+            parent = "/".join(item["path"].split("/")[:-1])
+            if parent:
+                has_apps_yaml.add(parent)
 
     for item in tree:
         if item["type"] != "blob":
@@ -52,37 +60,86 @@ async def get_structure() -> RepoStructure:
         if parts[0] in SKIP_DIRS or parts[0] == APPS_FILENAME:
             continue
 
-        if len(parts) < 2:
-            continue
+        is_4_level = len(parts) >= 2 and any(
+            d.startswith(parts[0] + "/") for d in has_apps_yaml
+        )
 
-        flavor = parts[0]
-        flavors.add(flavor)
+        if is_4_level:
+            if len(parts) < 3:
+                continue
 
-        if len(parts) >= 3 and parts[2] != APPS_FILENAME:
-            env = parts[1]
-            if not parts[1].startswith("_"):
-                if flavor not in environments:
-                    environments[flavor] = []
-                if env not in environments[flavor]:
-                    environments[flavor].append(env)
+            network = parts[0]
+            flavor = parts[1]
+            networks.add(network)
 
-        if len(parts) == 3 and parts[2].endswith(".yaml") and parts[2] != APPS_FILENAME:
-            env = parts[1]
-            cluster_name = parts[2].replace(".yaml", "")
-            key = f"{flavor}/{env}"
-            if key not in clusters:
-                clusters[key] = []
-            clusters[key].append(
-                ClusterInfo(
-                    name=cluster_name,
-                    flavor=flavor,
-                    env=env,
-                    file_path=path,
+            if network not in flavors:
+                flavors[network] = set()
+            flavors[network].add(flavor)
+
+            if len(parts) >= 4 and parts[3] != APPS_FILENAME:
+                env = parts[2]
+                if not env.startswith("_"):
+                    fkey = f"{network}/{flavor}"
+                    if fkey not in environments:
+                        environments[fkey] = []
+                    if env not in environments[fkey]:
+                        environments[fkey].append(env)
+
+            if len(parts) == 4 and parts[3].endswith(".yaml") and parts[3] != APPS_FILENAME:
+                env = parts[2]
+                cluster_name = parts[3].replace(".yaml", "")
+                key = f"{network}/{flavor}/{env}"
+                if key not in clusters:
+                    clusters[key] = []
+                clusters[key].append(
+                    ClusterInfo(
+                        name=cluster_name,
+                        network=network,
+                        flavor=flavor,
+                        env=env,
+                        file_path=path,
+                    )
                 )
-            )
+        else:
+            if len(parts) < 2:
+                continue
+
+            network = ""
+            flavor = parts[0]
+            networks.discard(flavor)
+
+            if "" not in flavors:
+                flavors[""] = set()
+            flavors[""].add(flavor)
+
+            if len(parts) >= 3 and parts[2] != APPS_FILENAME:
+                env = parts[1]
+                if not parts[1].startswith("_"):
+                    fkey = flavor
+                    if fkey not in environments:
+                        environments[fkey] = []
+                    if env not in environments[fkey]:
+                        environments[fkey].append(env)
+
+            if len(parts) == 3 and parts[2].endswith(".yaml") and parts[2] != APPS_FILENAME:
+                env = parts[1]
+                cluster_name = parts[2].replace(".yaml", "")
+                key = f"{flavor}/{env}"
+                if key not in clusters:
+                    clusters[key] = []
+                clusters[key].append(
+                    ClusterInfo(
+                        name=cluster_name,
+                        network="",
+                        flavor=flavor,
+                        env=env,
+                        file_path=path,
+                    )
+                )
 
     return RepoStructure(
-        flavors=sorted(flavors),
+        networks=sorted(networks),
+        flavors={k: sorted(v) for k, v in flavors.items()},
         environments={k: sorted(v) for k, v in environments.items()},
         clusters=clusters,
     )
@@ -173,6 +230,7 @@ def _extract_repo_url(app_data: dict) -> str | None:
 
 
 async def get_apps_for_scope(
+    network: str | None = None,
     flavor: str | None = None,
     env: str | None = None,
     cluster: str | None = None,
@@ -185,11 +243,17 @@ async def get_apps_for_scope(
     layers: list[tuple[str, str]] = []
 
     layers.append(("root", APPS_FILENAME))
-    if flavor:
+    if network and flavor:
+        layers.append(("flavor", f"{network}/{flavor}/{APPS_FILENAME}"))
+    elif flavor:
         layers.append(("flavor", f"{flavor}/{APPS_FILENAME}"))
-    if flavor and env:
+    if network and flavor and env:
+        layers.append(("env", f"{network}/{flavor}/{env}/{APPS_FILENAME}"))
+    elif flavor and env:
         layers.append(("env", f"{flavor}/{env}/{APPS_FILENAME}"))
-    if flavor and env and cluster:
+    if network and flavor and env and cluster:
+        layers.append(("cluster", f"{network}/{flavor}/{env}/{cluster}.yaml"))
+    elif flavor and env and cluster:
         layers.append(("cluster", f"{flavor}/{env}/{cluster}.yaml"))
 
     current_scope_path = layers[-1][1]
@@ -228,6 +292,8 @@ async def get_apps_for_scope(
 
     # Build AppConfig list
     scope_parts = []
+    if network:
+        scope_parts.append(network)
     if flavor:
         scope_parts.append(flavor)
     if env:
@@ -511,16 +577,28 @@ async def search_all_apps(query: str, field: str = "branch") -> list[SearchResul
     )
 
     results: list[SearchResult] = []
-    missing_checks: list[tuple[str, str, str, str, str, str]] = []
+    missing_checks: list[tuple[str, str, str, str, str, str, str, str]] = []
 
     for path, raw in zip(yaml_paths, file_contents):
         if isinstance(raw, Exception) or not isinstance(raw, dict):
             continue
 
         parts = path.split("/")
-        flavor = parts[0]
-        env = parts[1] if len(parts) >= 3 else ""
-        cluster = parts[2].replace(".yaml", "") if len(parts) == 3 else ""
+        if len(parts) == 4:
+            network = parts[0]
+            flavor = parts[1]
+            env = parts[2]
+            cluster = parts[3].replace(".yaml", "") if parts[3] != APPS_FILENAME else ""
+        elif len(parts) == 3:
+            network = ""
+            flavor = parts[0]
+            env = parts[1]
+            cluster = parts[2].replace(".yaml", "") if parts[2] != APPS_FILENAME else ""
+        else:
+            network = ""
+            flavor = parts[0] if len(parts) >= 2 else ""
+            env = ""
+            cluster = ""
 
         q = query.lower()
 
@@ -532,8 +610,8 @@ async def search_all_apps(query: str, field: str = "branch") -> list[SearchResul
                 repo_url = _extract_repo_url(app_data)
                 tr = _extract_target_revision(app_data)
                 if repo_url and tr:
-                    if not q or q in app_name.lower() or q in tr.lower() or q in path.lower() or q in flavor.lower() or q in env.lower() or q in cluster.lower():
-                        missing_checks.append((app_name, tr, repo_url, path, flavor, env, cluster))
+                    if not q or q in app_name.lower() or q in tr.lower() or q in path.lower() or q in flavor.lower() or q in env.lower() or q in cluster.lower() or q in network.lower():
+                        missing_checks.append((app_name, tr, repo_url, path, network, flavor, env, cluster))
                 continue
 
             if field == "branch":
@@ -545,6 +623,7 @@ async def search_all_apps(query: str, field: str = "branch") -> list[SearchResul
                             field_matched="targetRevision",
                             value=tr,
                             file_path=path,
+                            network=network,
                             flavor=flavor,
                             env=env,
                             cluster=cluster,
@@ -562,6 +641,7 @@ async def search_all_apps(query: str, field: str = "branch") -> list[SearchResul
                                     field_matched="valuesFiles",
                                     value=v,
                                     file_path=path,
+                                    network=network,
                                     flavor=flavor,
                                     env=env,
                                     cluster=cluster,
@@ -574,7 +654,7 @@ async def search_all_apps(query: str, field: str = "branch") -> list[SearchResul
             *[branch_exists(mc[2], mc[1]) for mc in missing_checks],
             return_exceptions=True,
         )
-        for (app_name, tr, _, path, flavor, env, cluster), exists in zip(missing_checks, exists_results):
+        for (app_name, tr, _, path, network, flavor, env, cluster), exists in zip(missing_checks, exists_results):
             if isinstance(exists, bool) and not exists:
                 results.append(
                     SearchResult(
@@ -582,6 +662,7 @@ async def search_all_apps(query: str, field: str = "branch") -> list[SearchResul
                         field_matched="branch_exists",
                         value=tr,
                         file_path=path,
+                        network=network,
                         flavor=flavor,
                         env=env,
                         cluster=cluster,

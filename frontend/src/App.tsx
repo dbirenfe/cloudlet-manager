@@ -26,6 +26,7 @@ const bulkBtnStyle: CSSProperties = {
 
 export default function App() {
   const [structure, setStructure] = useState<RepoStructure | null>(null);
+  const [selectedNetwork, setSelectedNetwork] = useState<string | null>(null);
   const [selectedFlavor, setSelectedFlavor] = useState<string | null>(null);
   const [selectedEnv, setSelectedEnv] = useState<string | null>(null);
   const [selectedCluster, setSelectedCluster] = useState<string | null>(null);
@@ -42,10 +43,12 @@ export default function App() {
   }, []);
 
   const handleSelect = (
+    network: string | null,
     flavor: string | null,
     env: string | null,
     cluster: string | null
   ) => {
+    setSelectedNetwork(network);
     setSelectedFlavor(flavor);
     setSelectedEnv(env);
     setSelectedCluster(cluster);
@@ -64,6 +67,7 @@ export default function App() {
         {activeView === "clusters" && (
           <Sidebar
             structure={structure}
+            selectedNetwork={selectedNetwork}
             selectedFlavor={selectedFlavor}
             selectedEnv={selectedEnv}
             selectedCluster={selectedCluster}
@@ -88,6 +92,7 @@ export default function App() {
           <AuditPanel />
         ) : (
           <AppsPanel
+            network={selectedNetwork}
             flavor={selectedFlavor}
             env={selectedEnv}
             cluster={selectedCluster}

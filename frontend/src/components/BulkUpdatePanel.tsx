@@ -250,12 +250,23 @@ export default function BulkUpdatePanel({
     }
     const first = Array.from(selectedClusters)[0];
     const parts = first.split("/");
-    const flavor = parts[0];
-    const env = parts[1];
-    const cluster = parts.slice(2).join("/");
+    let network: string | undefined;
+    let flavor: string;
+    let env: string;
+    let cluster: string;
+    if (parts.length >= 4) {
+      network = parts[0];
+      flavor = parts[1];
+      env = parts[2];
+      cluster = parts.slice(3).join("/");
+    } else {
+      flavor = parts[0];
+      env = parts[1];
+      cluster = parts.slice(2).join("/");
+    }
 
     let cancelled = false;
-    fetchApps(flavor, env, cluster)
+    fetchApps(network, flavor, env, cluster)
       .then((data) => {
         if (!cancelled) setAppConfigs(data.apps);
       })
@@ -292,11 +303,21 @@ export default function BulkUpdatePanel({
 
   const targets: BulkTarget[] = Array.from(selectedClusters).map((key) => {
     const parts = key.split("/");
-    const flavor = parts[0];
-    const env = parts[1];
-    const cluster = parts.slice(2).join("/");
+    let filePath: string;
+    if (parts.length >= 4) {
+      const network = parts[0];
+      const flavor = parts[1];
+      const env = parts[2];
+      const cluster = parts.slice(3).join("/");
+      filePath = `${network}/${flavor}/${env}/${cluster}.yaml`;
+    } else {
+      const flavor = parts[0];
+      const env = parts[1];
+      const cluster = parts.slice(2).join("/");
+      filePath = `${flavor}/${env}/${cluster}.yaml`;
+    }
     return {
-      file_path: `${flavor}/${env}/${cluster}.yaml`,
+      file_path: filePath,
       app_name: selectedApp,
     };
   });

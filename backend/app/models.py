@@ -33,6 +33,7 @@ class AppConfig(BaseModel):
 
 class ClusterInfo(BaseModel):
     name: str
+    network: str
     flavor: str
     env: str
     file_path: str
@@ -86,7 +87,8 @@ class BranchUpdateResponse(BaseModel):
 
 
 class RepoStructure(BaseModel):
-    flavors: list[str]
+    networks: list[str]
+    flavors: dict[str, list[str]]
     environments: dict[str, list[str]]
     clusters: dict[str, list[ClusterInfo]]
 
@@ -108,6 +110,7 @@ class SearchResult(BaseModel):
     field_matched: str
     value: str
     file_path: str
+    network: str
     flavor: str
     env: str
     cluster: str

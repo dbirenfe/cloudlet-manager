@@ -88,12 +88,13 @@ async def structure(user: dict = Depends(get_current_user)):
 
 @app.get("/api/apps", response_model=ScopeApps)
 async def apps(
+    network: str | None = Query(None),
     flavor: str | None = Query(None),
     env: str | None = Query(None),
     cluster: str | None = Query(None),
     user: dict = Depends(get_current_user),
 ):
-    return await get_apps_for_scope(flavor, env, cluster)
+    return await get_apps_for_scope(network, flavor, env, cluster)
 
 
 @app.get("/api/branches", response_model=BranchList)

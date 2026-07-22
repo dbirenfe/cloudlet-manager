@@ -4,10 +4,12 @@ import { fetchApps, addApp, fetchBranches, fetchValuesFiles } from "../api/clien
 import AppCard from "./AppCard";
 
 interface AppsPanelProps {
+  network: string | null;
   flavor: string | null;
   env: string | null;
   cluster: string | null;
   onNavigate: (
+    network: string | null,
     flavor: string | null,
     env: string | null,
     cluster: string | null
@@ -216,7 +218,7 @@ const s: Record<string, CSSProperties> = {
   },
 };
 
-export default function AppsPanel({ flavor, env, cluster, onNavigate }: AppsPanelProps) {
+export default function AppsPanel({ network, flavor, env, cluster, onNavigate }: AppsPanelProps) {
   const [data, setData] = useState<ScopeApps | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -266,7 +268,7 @@ export default function AppsPanel({ flavor, env, cluster, onNavigate }: AppsPane
     setLoading(true);
     setError(null);
 
-    fetchApps(flavor ?? undefined, env ?? undefined, cluster ?? undefined)
+    fetchApps(network ?? undefined, flavor ?? undefined, env ?? undefined, cluster ?? undefined)
       .then((d) => {
         if (!cancelled) setData(d);
       })
@@ -280,9 +282,10 @@ export default function AppsPanel({ flavor, env, cluster, onNavigate }: AppsPane
     return () => {
       cancelled = true;
     };
-  }, [flavor, env, cluster, refreshKey]);
+  }, [network, flavor, env, cluster, refreshKey]);
 
   const breadcrumbParts: string[] = [];
+  if (network) breadcrumbParts.push(network);
   if (flavor) breadcrumbParts.push(flavor);
   if (env) breadcrumbParts.push(env);
   if (cluster) breadcrumbParts.push(cluster);
@@ -314,36 +317,52 @@ export default function AppsPanel({ flavor, env, cluster, onNavigate }: AppsPane
     }
   };
 
-  const displayName = cluster || env || flavor || "All Clusters";
+  const displayName = cluster || env || flavor || network || "All Clusters";
   const warningCount =
     data?.apps.filter((a) => a.branch_exists === false).length ?? 0;
 
   let scopeFile = "_apps.yaml";
+  const prefix = network ? `${network}/` : "";
   if (flavor && env && cluster) {
-    scopeFile = `${flavor}/${env}/${cluster}.yaml`;
+    scopeFile = `${prefix}${flavor}/${env}/${cluster}.yaml`;
   } else if (flavor && env) {
-    scopeFile = `${flavor}/${env}/_apps.yaml`;
+    scopeFile = `${prefix}${flavor}/${env}/_apps.yaml`;
   } else if (flavor) {
-    scopeFile = `${flavor}/_apps.yaml`;
+    scopeFile = `${prefix}${flavor}/_apps.yaml`;
+  } else if (network) {
+    scopeFile = `${network}/_apps.yaml`;
   }
 
   return (
     <div style={s.panel}>
       <div style={s.breadcrumb}>
         <span
-          style={{ ...s.breadcrumbPart, ...(!flavor ? s.breadcrumbPartActive : {}) }}
-          onClick={() => onNavigate(null, null, null)}
+          style={{ ...s.breadcrumbPart, ...(!network && !flavor ? s.breadcrumbPartActive : {}) }}
+          onClick={() => onNavigate(null, null, null, null)}
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
         >
           root
         </span>
+        {network && (
+          <>
+            <span style={s.breadcrumbSep}>/</span>
+            <span
+              style={{ ...s.breadcrumbPart, ...(!flavor ? s.breadcrumbPartActive : {}) }}
+              onClick={() => onNavigate(network, null, null, null)}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >
+              {network}
+            </span>
+          </>
+        )}
         {flavor && (
           <>
             <span style={s.breadcrumbSep}>/</span>
             <span
               style={{ ...s.breadcrumbPart, ...(!env ? s.breadcrumbPartActive : {}) }}
-              onClick={() => onNavigate(flavor, null, null)}
+              onClick={() => onNavigate(network, flavor, null, null)}
               onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
@@ -356,7 +375,7 @@ export default function AppsPanel({ flavor, env, cluster, onNavigate }: AppsPane
             <span style={s.breadcrumbSep}>/</span>
             <span
               style={{ ...s.breadcrumbPart, ...(!cluster ? s.breadcrumbPartActive : {}) }}
-              onClick={() => onNavigate(flavor, env, null)}
+              onClick={() => onNavigate(network, flavor, env, null)}
               onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >

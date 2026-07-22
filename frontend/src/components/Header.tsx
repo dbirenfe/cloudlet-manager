@@ -5,7 +5,7 @@ import { searchApps } from "../api/client";
 interface HeaderProps {
   activeView: "clusters" | "audit";
   onViewChange: (view: "clusters" | "audit") => void;
-  onSearchNavigate?: (flavor: string, env: string, cluster: string) => void;
+  onSearchNavigate?: (network: string | null, flavor: string, env: string, cluster: string) => void;
   username?: string;
 }
 
@@ -290,7 +290,7 @@ export default function Header({ activeView, onViewChange, onSearchNavigate, use
   const handleResultClick = (result: SearchResult) => {
     setShowDropdown(false);
     setShowMissing(false);
-    onSearchNavigate?.(result.flavor, result.env, result.cluster);
+    onSearchNavigate?.(result.network || null, result.flavor, result.env, result.cluster);
   };
 
   const loadMissing = () => {
@@ -420,7 +420,7 @@ export default function Header({ activeView, onViewChange, onSearchNavigate, use
                     </div>
                     <span style={styles.resultValue}>{r.value}</span>
                     <span style={styles.resultMeta}>
-                      {r.flavor}/{r.env}/{r.cluster}
+                      {r.network ? `${r.network}/` : ""}{r.flavor}/{r.env}/{r.cluster}
                     </span>
                   </div>
                 ))}
@@ -540,7 +540,7 @@ export default function Header({ activeView, onViewChange, onSearchNavigate, use
                     </span>
                   </div>
                   <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                    {r.flavor}/{r.env}/{r.cluster}
+                    {r.network ? `${r.network}/` : ""}{r.flavor}/{r.env}/{r.cluster}
                   </div>
                 </div>
               ))}

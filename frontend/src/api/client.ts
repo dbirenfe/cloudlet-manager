@@ -53,13 +53,15 @@ export interface ScopeApps {
 
 export interface ClusterInfo {
   name: string;
+  network: string;
   flavor: string;
   env: string;
   file_path: string;
 }
 
 export interface RepoStructure {
-  flavors: string[];
+  networks: string[];
+  flavors: Record<string, string[]>;
   environments: Record<string, string[]>;
   clusters: Record<string, ClusterInfo[]>;
 }
@@ -97,11 +99,13 @@ export async function fetchMe(): Promise<UserInfo> {
 }
 
 export async function fetchApps(
+  network?: string,
   flavor?: string,
   env?: string,
   cluster?: string
 ): Promise<ScopeApps> {
   const params = new URLSearchParams();
+  if (network) params.set("network", network);
   if (flavor) params.set("flavor", flavor);
   if (env) params.set("env", env);
   if (cluster) params.set("cluster", cluster);
@@ -198,6 +202,7 @@ export interface SearchResult {
   field_matched: string;
   value: string;
   file_path: string;
+  network: string;
   flavor: string;
   env: string;
   cluster: string;
