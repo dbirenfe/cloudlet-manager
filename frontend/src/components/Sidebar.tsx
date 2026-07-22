@@ -324,7 +324,7 @@ export default function Sidebar({
         }}
       >
         <GlobeIcon />
-        All Clusters
+        Dashboard
       </div>
 
       {pinned.length > 0 && (

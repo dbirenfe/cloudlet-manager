@@ -487,7 +487,7 @@ export default function AppsPanel({ network, flavor, env, cluster, onNavigate, s
     );
   }
 
-  const displayName = cluster || env || flavor || network || "All Clusters";
+  const displayName = cluster || env || flavor || network || "Dashboard";
   const warningCount =
     data?.apps.filter((a) => a.branch_exists === false).length ?? 0;
 
