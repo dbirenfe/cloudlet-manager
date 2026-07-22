@@ -37,6 +37,7 @@ export interface AppSource {
 
 export interface AppConfig {
   name: string;
+  category: string;
   source: AppSource;
   defined_at: string;
   inherited_from: string | null;

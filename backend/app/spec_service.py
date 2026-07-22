@@ -262,10 +262,11 @@ async def get_apps_for_scope(
     current_scope_path = layers[-1][1]
 
     # Per-app tracking
-    app_branch_entries: dict[str, list[tuple[str, str]]] = {}  # app -> [(value, path)]
-    app_values_entries: dict[str, list[tuple[list[str], str]]] = {}  # app -> [([files], path)]
-    app_repo_entries: dict[str, list[tuple[str, str]]] = {}  # app -> [(url, path)]
+    app_branch_entries: dict[str, list[tuple[str, str]]] = {}
+    app_values_entries: dict[str, list[tuple[list[str], str]]] = {}
+    app_repo_entries: dict[str, list[tuple[str, str]]] = {}
     app_files: dict[str, list[str]] = {}
+    app_categories: dict[str, str] = {}
 
     for _, path in layers:
         raw = await _load_apps_file(path)
@@ -278,6 +279,9 @@ async def get_apps_for_scope(
                 app_values_entries[app_name] = []
                 app_repo_entries[app_name] = []
                 app_files[app_name] = []
+
+            if "_category" in app_data and app_name not in app_categories:
+                app_categories[app_name] = app_data["_category"]
 
             app_files[app_name].append(path)
 
@@ -386,6 +390,7 @@ async def get_apps_for_scope(
 
         app = AppConfig(
             name=app_name,
+            category=app_categories.get(app_name, ""),
             source=AppSource(
                 repoURL=repo_url,
                 targetRevision=effective_branch,

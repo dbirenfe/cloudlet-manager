@@ -23,6 +23,7 @@ class AppSource(BaseModel):
 
 class AppConfig(BaseModel):
     name: str
+    category: str = ""
     source: AppSource
     defined_at: str
     inherited_from: str | None = None

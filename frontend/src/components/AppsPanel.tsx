@@ -90,8 +90,43 @@ const s: Record<string, CSSProperties> = {
   },
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(480px, 1fr))",
-    gap: 16,
+    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+    gap: 12,
+  },
+  toolbar: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 16,
+    flexWrap: "wrap" as const,
+  },
+  filterBtn: {
+    padding: "5px 12px",
+    fontSize: 12,
+    fontWeight: 500,
+    border: "1px solid var(--border)",
+    borderRadius: 6,
+    cursor: "pointer",
+    transition: "all 0.12s",
+    background: "transparent",
+    color: "var(--text-secondary)",
+  },
+  filterBtnActive: {
+    background: "var(--accent-muted)",
+    color: "var(--accent)",
+    borderColor: "var(--accent)",
+    fontWeight: 600,
+  },
+  scopeSearch: {
+    padding: "6px 12px",
+    fontSize: 12,
+    background: "var(--bg-input)",
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius)",
+    color: "var(--text-primary)",
+    outline: "none",
+    width: 200,
+    marginLeft: "auto",
   },
   loading: {
     display: "flex",
@@ -223,6 +258,8 @@ export default function AppsPanel({ network, flavor, env, cluster, onNavigate }:
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [categoryFilter, setCategoryFilter] = useState<"all" | "edgeApps" | "hubApps">("all");
+  const [scopeSearch, setScopeSearch] = useState("");
   const [showAddApp, setShowAddApp] = useState(false);
   const [addCategory, setAddCategory] = useState("edgeApps");
   const [addName, setAddName] = useState("");
@@ -448,16 +485,46 @@ export default function AppsPanel({ network, flavor, env, cluster, onNavigate }:
               </span>
             </div>
           ) : (
-            <div style={s.grid}>
-              {data.apps.map((app) => (
-                <AppCard
-                  key={`${app.name}-${app.defined_at}`}
-                  app={app}
-                  scopeFile={scopeFile}
-                  onUpdated={() => setRefreshKey((k) => k + 1)}
+            <>
+              <div style={s.toolbar}>
+                {(["all", "edgeApps", "hubApps"] as const).map((f) => (
+                  <button
+                    key={f}
+                    style={{
+                      ...s.filterBtn,
+                      ...(categoryFilter === f ? s.filterBtnActive : {}),
+                    }}
+                    onClick={() => setCategoryFilter(f)}
+                  >
+                    {f === "all" ? "All" : f === "edgeApps" ? "Edge Apps" : "Hub Apps"}
+                    <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.7 }}>
+                      {f === "all"
+                        ? data.apps.length
+                        : data.apps.filter((a) => a.category === f).length}
+                    </span>
+                  </button>
+                ))}
+                <input
+                  style={s.scopeSearch}
+                  placeholder="Filter apps..."
+                  value={scopeSearch}
+                  onChange={(e) => setScopeSearch(e.target.value)}
                 />
-              ))}
-            </div>
+              </div>
+              <div style={s.grid}>
+                {data.apps
+                  .filter((app) => categoryFilter === "all" || app.category === categoryFilter)
+                  .filter((app) => !scopeSearch.trim() || app.name.toLowerCase().includes(scopeSearch.toLowerCase()))
+                  .map((app) => (
+                    <AppCard
+                      key={`${app.name}-${app.defined_at}`}
+                      app={app}
+                      scopeFile={scopeFile}
+                      onUpdated={() => setRefreshKey((k) => k + 1)}
+                    />
+                  ))}
+              </div>
+            </>
           )}
         </>
       )}
