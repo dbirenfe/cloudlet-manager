@@ -587,6 +587,14 @@ export default function AppsPanel({ network, flavor, env, cluster, onNavigate, s
                 transition: "all 0.12s",
               }}
               onClick={() => warningCount > 0 && setShowMissingOnly((v) => !v)}
+              onMouseEnter={(e) => {
+                if (warningCount > 0 && !showMissingOnly)
+                  (e.currentTarget as HTMLElement).style.borderColor = "var(--warning)";
+              }}
+              onMouseLeave={(e) => {
+                if (!showMissingOnly)
+                  (e.currentTarget as HTMLElement).style.borderColor = "var(--border)";
+              }}
             >
               <span
                 style={{
