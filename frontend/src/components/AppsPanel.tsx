@@ -1,6 +1,6 @@
 import { type CSSProperties, useEffect, useState } from "react";
-import type { ScopeApps, AddAppRequest } from "../api/client";
-import { fetchApps, addApp, fetchBranches, fetchValuesFiles } from "../api/client";
+import type { ScopeApps, AddAppRequest, RepoStructure, AuditEntry } from "../api/client";
+import { fetchApps, addApp, fetchBranches, fetchValuesFiles, fetchAuditLog } from "../api/client";
 import AppCard from "./AppCard";
 
 interface AppsPanelProps {
@@ -14,6 +14,7 @@ interface AppsPanelProps {
     env: string | null,
     cluster: string | null
   ) => void;
+  structure: RepoStructure | null;
 }
 
 const s: Record<string, CSSProperties> = {
@@ -256,7 +257,7 @@ const s: Record<string, CSSProperties> = {
   },
 };
 
-export default function AppsPanel({ network, flavor, env, cluster, onNavigate }: AppsPanelProps) {
+export default function AppsPanel({ network, flavor, env, cluster, onNavigate, structure }: AppsPanelProps) {
   const [data, setData] = useState<ScopeApps | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -358,6 +359,133 @@ export default function AppsPanel({ network, flavor, env, cluster, onNavigate }:
       setAddingApp(false);
     }
   };
+
+  const [recentChanges, setRecentChanges] = useState<AuditEntry[]>([]);
+
+  useEffect(() => {
+    if (!network && !flavor && !env && !cluster) {
+      fetchAuditLog(8).then((d) => setRecentChanges(d.entries)).catch(() => {});
+    }
+  }, [network, flavor, env, cluster]);
+
+  const isRoot = !network && !flavor && !env && !cluster;
+
+  if (isRoot && structure) {
+    const totalNetworks = structure.networks?.length || 0;
+    const totalFlavors = Object.values(structure.flavors || {}).reduce((a, b) => a + b.length, 0);
+    const totalEnvs = Object.values(structure.environments || {}).reduce((a, b) => a + b.length, 0);
+    const totalClusters = Object.values(structure.clusters || {}).reduce((a, b) => a + b.length, 0);
+
+    return (
+      <div style={s.panel}>
+        <h1 style={{ ...s.heading, fontSize: 28, marginBottom: 4 }}>Cloudlet Manager</h1>
+        <p style={{ color: "var(--text-muted)", fontSize: 14, marginBottom: 28 }}>
+          GitOps branch management dashboard
+        </p>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 32 }}>
+          {[
+            { label: "Networks", value: totalNetworks, color: "var(--accent)" },
+            { label: "Flavors", value: totalFlavors, color: "var(--text-primary)" },
+            { label: "Environments", value: totalEnvs, color: "var(--text-primary)" },
+            { label: "Clusters", value: totalClusters, color: "var(--success)" },
+          ].map((stat) => (
+            <div key={stat.label} style={{
+              background: "var(--bg-card)", border: "1px solid var(--border)",
+              borderRadius: "var(--radius-lg)", padding: "20px 18px",
+              display: "flex", flexDirection: "column" as const, gap: 4,
+            }}>
+              <span style={{ fontSize: 28, fontWeight: 700, color: stat.color }}>{stat.value}</span>
+              <span style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>
+                {stat.label}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+          <div>
+            <h2 style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", marginBottom: 14 }}>
+              Networks
+            </h2>
+            <div style={{ display: "flex", flexDirection: "column" as const, gap: 8 }}>
+              {(structure.networks || []).map((net) => {
+                const flavorCount = (structure.flavors?.[net] || []).length;
+                const clusterCount = Object.entries(structure.clusters || {})
+                  .filter(([k]) => k.startsWith(net + "/"))
+                  .reduce((a, [, v]) => a + v.length, 0);
+                return (
+                  <div
+                    key={net}
+                    onClick={() => onNavigate(net, null, null, null)}
+                    style={{
+                      background: "var(--bg-card)", border: "1px solid var(--border)",
+                      borderRadius: "var(--radius)", padding: "14px 16px",
+                      cursor: "pointer", transition: "all 0.12s",
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.borderColor = "var(--accent)";
+                      (e.currentTarget as HTMLElement).style.background = "var(--bg-hover)";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.borderColor = "var(--border)";
+                      (e.currentTarget as HTMLElement).style.background = "var(--bg-card)";
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>{net}</div>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                        {flavorCount} flavor{flavorCount !== 1 ? "s" : ""} · {clusterCount} cluster{clusterCount !== 1 ? "s" : ""}
+                      </div>
+                    </div>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: "var(--text-muted)" }}>
+                      <path d="M6 4L10 8L6 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <h2 style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", marginBottom: 14 }}>
+              Recent Activity
+            </h2>
+            <div style={{ display: "flex", flexDirection: "column" as const, gap: 6 }}>
+              {recentChanges.length === 0 && (
+                <div style={{ color: "var(--text-muted)", fontSize: 12, padding: 12 }}>Loading...</div>
+              )}
+              {recentChanges.map((entry, i) => {
+                const timeAgo = (() => {
+                  const diff = Date.now() - new Date(entry.timestamp).getTime();
+                  const mins = Math.floor(diff / 60000);
+                  if (mins < 60) return `${mins}m ago`;
+                  const hrs = Math.floor(mins / 60);
+                  if (hrs < 24) return `${hrs}h ago`;
+                  return `${Math.floor(hrs / 24)}d ago`;
+                })();
+                return (
+                  <div key={entry.sha + i} style={{
+                    background: "var(--bg-card)", border: "1px solid var(--border)",
+                    borderRadius: "var(--radius)", padding: "10px 14px",
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--accent)" }}>{entry.author}</span>
+                      <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{timeAgo}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+                      {entry.message.replace(/^\[.*?\]\s*/, "")}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const displayName = cluster || env || flavor || network || "All Clusters";
   const warningCount =

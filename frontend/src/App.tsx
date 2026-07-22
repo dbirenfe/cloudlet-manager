@@ -97,6 +97,7 @@ export default function App() {
             env={selectedEnv}
             cluster={selectedCluster}
             onNavigate={handleSelect}
+            structure={structure}
           />
         )}
       </div>
