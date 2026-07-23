@@ -16,6 +16,7 @@ from app.github_client import (
     get_commits,
     get_commit_files,
     parse_yaml,
+    clear_content_cache,
 )
 from app.models import (
     AppConfig,
@@ -875,6 +876,7 @@ async def undo_last_commit(username: str = "unknown") -> dict:
 
         commit_url = result.get("commit", {}).get("html_url", "") or commit_url
 
+    clear_content_cache()
     return {"commit_url": commit_url, "reverted_message": last_message}
 
 

@@ -114,6 +114,10 @@ def invalidate_content_cache(repo: str, path: str, branch: str) -> None:
     _content_cache.pop(cache_key, None)
 
 
+def clear_content_cache() -> None:
+    _content_cache.clear()
+
+
 # ── File Update ──
 
 async def get_file_sha(repo: str, path: str, branch: str) -> str:
