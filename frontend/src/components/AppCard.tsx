@@ -2,14 +2,11 @@ import { type CSSProperties, useEffect, useState } from "react";
 import type { AppConfig, UpdateResponse } from "../api/client";
 import {
   fetchBranches,
-  updateBranch,
   fetchValuesFiles,
-  updateValuesFiles,
-  inheritField,
   previewDiff,
   undoLastChange,
   removeApp,
-  updateSyncPolicy,
+  updateCombined,
 } from "../api/client";
 
 function TrashIcon() {
@@ -599,21 +596,21 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
     setUndoResult(null);
 
     try {
-      let lastResult: UpdateResponse | null = null;
+      const opts: Parameters<typeof updateCombined>[2] = {};
 
       if (isBranchChanged) {
         if (selectedBranch === INHERIT_VALUE) {
-          lastResult = await inheritField(scopeFile, app.name, "targetRevision");
+          opts.inheritBranch = true;
         } else {
-          lastResult = await updateBranch(scopeFile, app.name, selectedBranch);
+          opts.branch = selectedBranch;
         }
       }
 
       if (isValuesChanged) {
         if (valuesInherit) {
-          lastResult = await inheritField(scopeFile, app.name, "valuesFiles");
+          opts.inheritValues = true;
         } else {
-          lastResult = await updateValuesFiles(scopeFile, app.name, editedValues);
+          opts.valuesFiles = editedValues;
         }
       }
 
@@ -625,9 +622,10 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
         if (syncOptions.length > 0) {
           policy.syncOptions = syncOptions;
         }
-        lastResult = await updateSyncPolicy(scopeFile, app.name, Object.keys(policy).length > 0 ? policy : null);
+        opts.syncPolicy = Object.keys(policy).length > 0 ? policy : null;
       }
 
+      const lastResult = await updateCombined(scopeFile, app.name, opts);
       setResult(lastResult);
       setApplied(true);
       setShowDiff(false);

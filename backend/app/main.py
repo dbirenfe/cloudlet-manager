@@ -24,12 +24,14 @@ from app.models import (
     AddAppRequest,
     RemoveAppRequest,
     UpdateSyncPolicyRequest,
+    CombinedUpdateRequest,
 )
 from app.spec_service import (
     get_structure,
     get_apps_for_scope,
     update_app_branch,
     update_app_values,
+    update_app_combined,
     inherit_field,
     get_audit_log,
     search_all_apps,
@@ -315,6 +317,28 @@ async def update_sync_policy(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update sync policy: {e}")
+
+
+@app.post("/api/update-combined", response_model=UpdateResponse)
+async def update_combined(
+    req: CombinedUpdateRequest,
+    user: dict = Depends(get_current_user),
+):
+    try:
+        username = user.get("preferred_username", "unknown")
+        sp = req.sync_policy if req.sync_policy != "__UNSET__" else "__UNSET__"
+        result = await update_app_combined(
+            req.file_path, req.app_name,
+            branch=req.branch, values_files=req.values_files,
+            sync_policy=sp, inherit_branch=req.inherit_branch,
+            inherit_values=req.inherit_values, username=username,
+        )
+        commit_url = result.get("commit", {}).get("html_url", "")
+        return UpdateResponse(success=True, message=f"Updated by {username}", commit_url=commit_url)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update: {e}")
 
 
 @app.get("/api/auth/config")

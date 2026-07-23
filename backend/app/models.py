@@ -152,6 +152,16 @@ class BulkUpdateResponse(BaseModel):
     results: list[BulkTargetResult]
 
 
+class CombinedUpdateRequest(BaseModel):
+    file_path: str
+    app_name: str
+    branch: str | None = None
+    values_files: list[str] | None = None
+    sync_policy: dict | None = "__UNSET__"
+    inherit_branch: bool = False
+    inherit_values: bool = False
+
+
 class DiffPreviewRequest(BaseModel):
     file_path: str
     app_name: str

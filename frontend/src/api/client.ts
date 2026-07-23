@@ -179,6 +179,31 @@ export async function inheritField(
   });
 }
 
+export async function updateCombined(
+  filePath: string,
+  appName: string,
+  opts: {
+    branch?: string;
+    valuesFiles?: string[];
+    syncPolicy?: Record<string, unknown> | null;
+    inheritBranch?: boolean;
+    inheritValues?: boolean;
+  }
+): Promise<UpdateResponse> {
+  return request<UpdateResponse>("/api/update-combined", {
+    method: "POST",
+    body: JSON.stringify({
+      file_path: filePath,
+      app_name: appName,
+      branch: opts.branch ?? null,
+      values_files: opts.valuesFiles ?? null,
+      sync_policy: opts.syncPolicy !== undefined ? opts.syncPolicy : "__UNSET__",
+      inherit_branch: opts.inheritBranch ?? false,
+      inherit_values: opts.inheritValues ?? false,
+    }),
+  });
+}
+
 export async function fetchAuthConfig(): Promise<{
   enabled: boolean;
   url?: string;

@@ -958,6 +958,85 @@ async def remove_app(
     )
 
 
+async def update_app_combined(
+    file_path: str,
+    app_name: str,
+    branch: str | None = None,
+    values_files: list[str] | None = None,
+    sync_policy: dict | None = "__UNSET__",
+    inherit_branch: bool = False,
+    inherit_values: bool = False,
+    username: str = "unknown",
+) -> dict:
+    s = get_settings()
+    content = await get_file_content(s.github_spec_repo, file_path, s.github_spec_branch, use_cache=False)
+    data = parse_yaml(content)
+
+    app_data, cat_key = _find_app_in_raw(data, app_name)
+    changes: list[str] = []
+
+    if inherit_branch:
+        if app_data:
+            src = _get_source(app_data) or {}
+            src.pop("targetRevision", None)
+            changes.append("inherit branch")
+    elif branch is not None:
+        if app_data:
+            src = _get_or_create_source(app_data)
+            src["targetRevision"] = branch
+        else:
+            data[app_name] = {"source": {"targetRevision": branch}}
+            app_data, cat_key = _find_app_in_raw(data, app_name)
+        changes.append(f"branch={branch}")
+
+    if inherit_values:
+        if app_data:
+            src = _get_source(app_data) or {}
+            helm = src.get("helm", {})
+            key = _values_key(helm)
+            helm.pop(key, None)
+            if not helm:
+                src.pop("helm", None)
+            changes.append("inherit values")
+    elif values_files is not None and len(values_files) > 0:
+        if app_data:
+            src = _get_or_create_source(app_data)
+            if "helm" not in src:
+                src["helm"] = {}
+            key = _values_key(src["helm"])
+            src["helm"][key] = values_files
+        changes.append(f"values={values_files}")
+
+    if sync_policy != "__UNSET__":
+        if app_data:
+            if sync_policy:
+                app_data["syncPolicy"] = sync_policy
+            else:
+                app_data.pop("syncPolicy", None)
+            changes.append("syncPolicy")
+
+    if app_data:
+        src = _get_source(app_data) or {}
+        meaningful = {k for k in src if k not in ("path", "repoURL")}
+        if not meaningful and inherit_branch and inherit_values:
+            if cat_key and cat_key in data and app_name in data[cat_key]:
+                del data[cat_key][app_name]
+                if not data[cat_key]:
+                    del data[cat_key]
+            elif app_name in data:
+                del data[app_name]
+
+    if not data:
+        new_content = "# No overrides - inherits from parent scope\n"
+    else:
+        new_content = yaml.dump(data, default_flow_style=False, sort_keys=False)
+
+    message = f"[{username}] update {app_name}: {', '.join(changes)} in {file_path}"
+    return await update_file(
+        s.github_spec_repo, file_path, s.github_spec_branch, new_content, message
+    )
+
+
 async def update_app_sync_policy(
     file_path: str,
     app_name: str,
