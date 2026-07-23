@@ -289,7 +289,7 @@ export async function removeApp(filePath: string, appName: string): Promise<Upda
 export async function updateSyncPolicy(
   filePath: string,
   appName: string,
-  syncPolicy: SyncPolicy
+  syncPolicy: SyncPolicy | Record<string, unknown> | null
 ): Promise<UpdateResponse> {
   return request<UpdateResponse>("/api/update-sync-policy", {
     method: "POST",
