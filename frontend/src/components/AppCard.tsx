@@ -517,9 +517,6 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
   const [syncPrune, setSyncPrune] = useState(app.sync_policy?.automated?.prune ?? false);
   const [syncSelfHeal, setSyncSelfHeal] = useState(app.sync_policy?.automated?.selfHeal ?? false);
   const [syncOptions, setSyncOptions] = useState<string[]>(app.sync_policy?.syncOptions ?? []);
-  const [syncUpdating, setSyncUpdating] = useState(false);
-  const [syncResult, setSyncResult] = useState<UpdateResponse | null>(null);
-  const [syncError, setSyncError] = useState<string | null>(null);
 
   useEffect(() => {
     if (applied) return;
@@ -531,8 +528,6 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
     setSyncPrune(app.sync_policy?.automated?.prune ?? false);
     setSyncSelfHeal(app.sync_policy?.automated?.selfHeal ?? false);
     setSyncOptions(app.sync_policy?.syncOptions ?? []);
-    setSyncResult(null);
-    setSyncError(null);
   }, [app]);
 
   const loadBranches = async () => {
@@ -580,7 +575,16 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
   const isValuesChanged = valuesInherit !== wasValuesInherited
     || (!valuesInherit && JSON.stringify(editedValues) !== JSON.stringify(values_info.values));
 
-  const hasAnyChange = applied ? false : (isBranchChanged || isValuesChanged);
+  const origSyncAutomated = app.sync_policy?.automated !== null && app.sync_policy?.automated !== undefined;
+  const origSyncPrune = app.sync_policy?.automated?.prune ?? false;
+  const origSyncSelfHeal = app.sync_policy?.automated?.selfHeal ?? false;
+  const origSyncOptions = app.sync_policy?.syncOptions ?? [];
+  const isSyncChanged = syncAutomated !== origSyncAutomated
+    || syncPrune !== origSyncPrune
+    || syncSelfHeal !== origSyncSelfHeal
+    || JSON.stringify(syncOptions) !== JSON.stringify(origSyncOptions);
+
+  const hasAnyChange = applied ? false : (isBranchChanged || isValuesChanged || isSyncChanged);
 
   const handleApplyClick = () => {
     if (!hasAnyChange) return;
@@ -611,6 +615,17 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
         } else {
           lastResult = await updateValuesFiles(scopeFile, app.name, editedValues);
         }
+      }
+
+      if (isSyncChanged) {
+        const policy: Record<string, unknown> = {};
+        if (syncAutomated) {
+          policy.automated = { prune: syncPrune, selfHeal: syncSelfHeal };
+        }
+        if (syncOptions.length > 0) {
+          policy.syncOptions = syncOptions;
+        }
+        lastResult = await updateSyncPolicy(scopeFile, app.name, Object.keys(policy).length > 0 ? policy : null);
       }
 
       setResult(lastResult);
@@ -694,24 +709,6 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
   const addValue = (file: string) => {
     if (file && !editedValues.includes(file)) {
       setEditedValues((prev) => [...prev, file]);
-    }
-  };
-
-  const handleApplySyncPolicy = async () => {
-    setSyncUpdating(true);
-    setSyncError(null);
-    setSyncResult(null);
-    try {
-      const policy: SyncPolicy = {
-        automated: syncAutomated ? { prune: syncPrune, selfHeal: syncSelfHeal } : null,
-        syncOptions: syncOptions.length > 0 ? syncOptions : null,
-      };
-      const res = await updateSyncPolicy(scopeFile, app.name, policy);
-      setSyncResult(res);
-    } catch (e) {
-      setSyncError(e instanceof Error ? e.message : "Update failed");
-    } finally {
-      setSyncUpdating(false);
     }
   };
 
@@ -985,41 +982,6 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
             </select>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button
-              style={{
-                ...s.syncApplyBtn,
-                ...(syncUpdating ? { opacity: 0.4, cursor: "not-allowed" } : {}),
-              }}
-              disabled={syncUpdating}
-              onClick={handleApplySyncPolicy}
-              onMouseEnter={(e) => {
-                if (!syncUpdating)
-                  (e.currentTarget as HTMLElement).style.background = "var(--accent-hover)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.background = "var(--accent)";
-              }}
-            >
-              {syncUpdating ? "Applying..." : "Apply Sync Policy"}
-            </button>
-            {syncResult && (
-              <span style={{ fontSize: 11, color: "var(--success)" }}>
-                Saved
-                {syncResult.commit_url && (
-                  <>
-                    {" — "}
-                    <a href={syncResult.commit_url} target="_blank" rel="noreferrer" style={{ color: "var(--success)" }}>
-                      view commit
-                    </a>
-                  </>
-                )}
-              </span>
-            )}
-            {syncError && (
-              <span style={{ fontSize: 11, color: "var(--danger)" }}>{syncError}</span>
-            )}
-          </div>
         </div>
       </div>
 
@@ -1068,6 +1030,7 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
                 (valuesInherit
                   ? "values: inherit"
                   : `values: [${editedValues.join(", ")}]`),
+              isSyncChanged && "sync policy",
             ]
               .filter(Boolean)
               .join(", ")}
