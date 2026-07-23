@@ -1,5 +1,5 @@
 import { type CSSProperties, useEffect, useState } from "react";
-import type { AppConfig, UpdateResponse, SyncPolicy } from "../api/client";
+import type { AppConfig, UpdateResponse } from "../api/client";
 import {
   fetchBranches,
   updateBranch,
