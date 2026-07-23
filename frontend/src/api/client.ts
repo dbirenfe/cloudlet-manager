@@ -35,6 +35,11 @@ export interface AppSource {
   helm?: Record<string, unknown>;
 }
 
+export interface SyncPolicy {
+  automated: { prune?: boolean; selfHeal?: boolean } | null;
+  syncOptions: string[] | null;
+}
+
 export interface AppConfig {
   name: string;
   category: string;
@@ -44,6 +49,7 @@ export interface AppConfig {
   branch_exists: boolean | null;
   branch_info: FieldInfo;
   values_info: ValuesFieldInfo;
+  sync_policy: SyncPolicy | null;
 }
 
 export interface ScopeApps {
@@ -277,6 +283,21 @@ export async function removeApp(filePath: string, appName: string): Promise<Upda
   return request<UpdateResponse>("/api/remove-app", {
     method: "POST",
     body: JSON.stringify({ file_path: filePath, app_name: appName }),
+  });
+}
+
+export async function updateSyncPolicy(
+  filePath: string,
+  appName: string,
+  syncPolicy: SyncPolicy
+): Promise<UpdateResponse> {
+  return request<UpdateResponse>("/api/update-sync-policy", {
+    method: "POST",
+    body: JSON.stringify({
+      file_path: filePath,
+      app_name: appName,
+      sync_policy: syncPolicy,
+    }),
   });
 }
 

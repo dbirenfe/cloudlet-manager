@@ -21,10 +21,16 @@ class AppSource(BaseModel):
     helm: dict | None = None
 
 
+class SyncPolicy(BaseModel):
+    automated: dict | None = None
+    syncOptions: list[str] | None = None
+
+
 class AppConfig(BaseModel):
     name: str
     category: str = ""
     source: AppSource
+    sync_policy: SyncPolicy | None = None
     defined_at: str
     inherited_from: str | None = None
     branch_exists: bool | None = None
@@ -182,3 +188,9 @@ class AddAppRequest(BaseModel):
 class RemoveAppRequest(BaseModel):
     file_path: str
     app_name: str
+
+
+class UpdateSyncPolicyRequest(BaseModel):
+    file_path: str
+    app_name: str
+    sync_policy: dict

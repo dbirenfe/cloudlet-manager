@@ -23,6 +23,7 @@ from app.models import (
     UndoResponse,
     AddAppRequest,
     RemoveAppRequest,
+    UpdateSyncPolicyRequest,
 )
 from app.spec_service import (
     get_structure,
@@ -37,6 +38,7 @@ from app.spec_service import (
     undo_last_commit,
     add_app,
     remove_app,
+    update_app_sync_policy,
 )
 from app.github_client import list_branches, list_values_files
 
@@ -290,6 +292,28 @@ async def remove_app_endpoint(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to remove app: {e}")
+
+
+@app.post("/api/update-sync-policy", response_model=UpdateResponse)
+async def update_sync_policy(
+    req: UpdateSyncPolicyRequest,
+    user: dict = Depends(get_current_user),
+):
+    try:
+        username = user.get("preferred_username", "unknown")
+        result = await update_app_sync_policy(
+            req.file_path, req.app_name, req.sync_policy, username=username,
+        )
+        commit_url = result.get("commit", {}).get("html_url", "")
+        return UpdateResponse(
+            success=True,
+            message=f"Sync policy updated by {username}",
+            commit_url=commit_url,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update sync policy: {e}")
 
 
 @app.get("/api/auth/config")

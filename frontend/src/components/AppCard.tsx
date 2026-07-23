@@ -1,5 +1,5 @@
 import { type CSSProperties, useEffect, useState } from "react";
-import type { AppConfig, UpdateResponse } from "../api/client";
+import type { AppConfig, UpdateResponse, SyncPolicy } from "../api/client";
 import {
   fetchBranches,
   updateBranch,
@@ -9,6 +9,7 @@ import {
   previewDiff,
   undoLastChange,
   removeApp,
+  updateSyncPolicy,
 } from "../api/client";
 
 function TrashIcon() {
@@ -378,6 +379,61 @@ const s: Record<string, CSSProperties> = {
     justifyContent: "center",
     transition: "color 0.15s, background 0.15s",
   },
+  syncHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    cursor: "pointer",
+    userSelect: "none" as const,
+    fontSize: 10,
+    fontWeight: 600,
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.06em",
+    color: "var(--text-muted)",
+    padding: "6px 0",
+  },
+  syncChevron: {
+    transition: "transform 0.2s ease",
+    display: "inline-flex",
+  },
+  syncBody: {
+    overflow: "hidden",
+    transition: "max-height 0.25s ease, opacity 0.2s ease",
+  },
+  syncSubLabel: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: "var(--text-secondary)",
+    marginBottom: 6,
+    marginTop: 10,
+  },
+  syncCheckRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    fontSize: 12,
+    color: "var(--text-primary)",
+    marginBottom: 4,
+  },
+  syncCheckbox: {
+    accentColor: "var(--accent)",
+    cursor: "pointer",
+    width: 14,
+    height: 14,
+  },
+  syncApplyBtn: {
+    padding: "6px 14px",
+    background: "var(--accent)",
+    color: "#fff",
+    border: "none",
+    borderRadius: "var(--radius)",
+    fontSize: 11,
+    fontWeight: 500,
+    cursor: "pointer",
+    transition: "background 0.15s, opacity 0.15s",
+    whiteSpace: "nowrap" as const,
+    marginTop: 10,
+  },
 };
 
 function BranchIcon() {
@@ -402,6 +458,26 @@ function FileIcon() {
     </svg>
   );
 }
+
+function SyncIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+      <path d="M2 8C2 4.68629 4.68629 2 8 2C10.2 2 12.1 3.3 13 5.2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M14 8C14 11.3137 11.3137 14 8 14C5.8 14 3.9 12.7 3 10.8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M13 2V5.2H9.8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3 14V10.8H6.2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+const SYNC_OPTION_PRESETS = [
+  "CreateNamespace=true",
+  "ServerSideApply=true",
+  "PruneLast=true",
+  "ApplyOutOfSyncOnly=true",
+  "PrunePropagationPolicy=foreground",
+  "Replace=true",
+];
 
 export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
   const { branch_info, values_info } = app;
@@ -436,12 +512,27 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
   const [loadingDiff, setLoadingDiff] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
 
+  const [syncExpanded, setSyncExpanded] = useState(false);
+  const [syncAutomated, setSyncAutomated] = useState(app.sync_policy?.automated !== null && app.sync_policy?.automated !== undefined);
+  const [syncPrune, setSyncPrune] = useState(app.sync_policy?.automated?.prune ?? false);
+  const [syncSelfHeal, setSyncSelfHeal] = useState(app.sync_policy?.automated?.selfHeal ?? false);
+  const [syncOptions, setSyncOptions] = useState<string[]>(app.sync_policy?.syncOptions ?? []);
+  const [syncUpdating, setSyncUpdating] = useState(false);
+  const [syncResult, setSyncResult] = useState<UpdateResponse | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
   useEffect(() => {
     if (applied) return;
     setSelectedBranch(branch_info.is_local ? branch_info.value : INHERIT_VALUE);
     setEditedValues(values_info.is_local ? [...values_info.values] : []);
     setValuesInherit(!values_info.is_local);
     setError(null);
+    setSyncAutomated(app.sync_policy?.automated !== null && app.sync_policy?.automated !== undefined);
+    setSyncPrune(app.sync_policy?.automated?.prune ?? false);
+    setSyncSelfHeal(app.sync_policy?.automated?.selfHeal ?? false);
+    setSyncOptions(app.sync_policy?.syncOptions ?? []);
+    setSyncResult(null);
+    setSyncError(null);
   }, [app]);
 
   const loadBranches = async () => {
@@ -603,6 +694,24 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
   const addValue = (file: string) => {
     if (file && !editedValues.includes(file)) {
       setEditedValues((prev) => [...prev, file]);
+    }
+  };
+
+  const handleApplySyncPolicy = async () => {
+    setSyncUpdating(true);
+    setSyncError(null);
+    setSyncResult(null);
+    try {
+      const policy: SyncPolicy = {
+        automated: syncAutomated ? { prune: syncPrune, selfHeal: syncSelfHeal } : null,
+        syncOptions: syncOptions.length > 0 ? syncOptions : null,
+      };
+      const res = await updateSyncPolicy(scopeFile, app.name, policy);
+      setSyncResult(res);
+    } catch (e) {
+      setSyncError(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setSyncUpdating(false);
     }
   };
 
@@ -783,6 +892,135 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
             )}
           </div>
         )}
+      </div>
+
+      {/* Sync Policy */}
+      <div style={{ marginBottom: 10, borderTop: "1px solid var(--border)", paddingTop: 4 }}>
+        <div
+          style={s.syncHeader}
+          onClick={() => setSyncExpanded((v) => !v)}
+        >
+          <span style={{ ...s.syncChevron, transform: syncExpanded ? "rotate(90deg)" : "rotate(0deg)" }}>
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+              <path d="M6 4L10 8L6 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+          <SyncIcon />
+          Sync Policy
+        </div>
+        <div
+          style={{
+            ...s.syncBody,
+            maxHeight: syncExpanded ? 300 : 0,
+            opacity: syncExpanded ? 1 : 0,
+          }}
+        >
+          <div style={s.syncSubLabel}>Automated</div>
+          <label style={s.syncCheckRow}>
+            <input
+              type="checkbox"
+              checked={syncAutomated}
+              onChange={(e) => {
+                setSyncAutomated(e.target.checked);
+                if (!e.target.checked) {
+                  setSyncPrune(false);
+                  setSyncSelfHeal(false);
+                }
+              }}
+              style={s.syncCheckbox}
+            />
+            Enabled
+          </label>
+          {syncAutomated && (
+            <>
+              <label style={{ ...s.syncCheckRow, paddingLeft: 22 }}>
+                <input
+                  type="checkbox"
+                  checked={syncPrune}
+                  onChange={(e) => setSyncPrune(e.target.checked)}
+                  style={s.syncCheckbox}
+                />
+                Prune
+              </label>
+              <label style={{ ...s.syncCheckRow, paddingLeft: 22 }}>
+                <input
+                  type="checkbox"
+                  checked={syncSelfHeal}
+                  onChange={(e) => setSyncSelfHeal(e.target.checked)}
+                  style={s.syncCheckbox}
+                />
+                Self Heal
+              </label>
+            </>
+          )}
+
+          <div style={s.syncSubLabel}>Sync Options</div>
+          <div style={s.valuesRow}>
+            {syncOptions.map((opt, idx) => (
+              <span key={`${opt}-${idx}`} style={s.chip}>
+                {opt}
+                <button
+                  style={s.chipRemove}
+                  onClick={() => setSyncOptions((prev) => prev.filter((_, i) => i !== idx))}
+                >
+                  &times;
+                </button>
+              </span>
+            ))}
+            <select
+              style={{ ...s.select, maxWidth: 220, flex: "none", fontSize: 12 }}
+              value=""
+              onChange={(e) => {
+                if (e.target.value && !syncOptions.includes(e.target.value)) {
+                  setSyncOptions((prev) => [...prev, e.target.value]);
+                }
+              }}
+            >
+              <option value="">+ Add option...</option>
+              {SYNC_OPTION_PRESETS
+                .filter((o) => !syncOptions.includes(o))
+                .map((o) => (
+                  <option key={o} value={o}>{o}</option>
+                ))}
+            </select>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button
+              style={{
+                ...s.syncApplyBtn,
+                ...(syncUpdating ? { opacity: 0.4, cursor: "not-allowed" } : {}),
+              }}
+              disabled={syncUpdating}
+              onClick={handleApplySyncPolicy}
+              onMouseEnter={(e) => {
+                if (!syncUpdating)
+                  (e.currentTarget as HTMLElement).style.background = "var(--accent-hover)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.background = "var(--accent)";
+              }}
+            >
+              {syncUpdating ? "Applying..." : "Apply Sync Policy"}
+            </button>
+            {syncResult && (
+              <span style={{ fontSize: 11, color: "var(--success)" }}>
+                Saved
+                {syncResult.commit_url && (
+                  <>
+                    {" — "}
+                    <a href={syncResult.commit_url} target="_blank" rel="noreferrer" style={{ color: "var(--success)" }}>
+                      view commit
+                    </a>
+                  </>
+                )}
+              </span>
+            )}
+            {syncError && (
+              <span style={{ fontSize: 11, color: "var(--danger)" }}>{syncError}</span>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Apply / Preview buttons */}

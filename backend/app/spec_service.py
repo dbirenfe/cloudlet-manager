@@ -20,6 +20,7 @@ from app.github_client import (
 from app.models import (
     AppConfig,
     AppSource,
+    SyncPolicy,
     ClusterInfo,
     FieldInfo,
     ValuesFieldInfo,
@@ -229,6 +230,16 @@ def _extract_repo_url(app_data: dict) -> str | None:
     return src.get("repoURL")
 
 
+def _extract_sync_policy(app_data: dict) -> SyncPolicy | None:
+    sp = app_data.get("syncPolicy")
+    if not isinstance(sp, dict):
+        return None
+    return SyncPolicy(
+        automated=sp.get("automated"),
+        syncOptions=sp.get("syncOptions"),
+    )
+
+
 async def get_apps_for_scope(
     network: str | None = None,
     flavor: str | None = None,
@@ -265,6 +276,7 @@ async def get_apps_for_scope(
     app_branch_entries: dict[str, list[tuple[str, str]]] = {}
     app_values_entries: dict[str, list[tuple[list[str], str]]] = {}
     app_repo_entries: dict[str, list[tuple[str, str]]] = {}
+    app_sync_policies: dict[str, SyncPolicy | None] = {}
     app_files: dict[str, list[str]] = {}
     app_categories: dict[str, str] = {}
 
@@ -278,6 +290,7 @@ async def get_apps_for_scope(
                 app_branch_entries[app_name] = []
                 app_values_entries[app_name] = []
                 app_repo_entries[app_name] = []
+                app_sync_policies[app_name] = None
                 app_files[app_name] = []
 
             if "_category" in app_data and app_name not in app_categories:
@@ -296,6 +309,10 @@ async def get_apps_for_scope(
             vf = _extract_values_files(app_data)
             if vf is not None:
                 app_values_entries[app_name].append((vf, path))
+
+            sp = _extract_sync_policy(app_data)
+            if sp is not None:
+                app_sync_policies[app_name] = sp
 
     # Build AppConfig list
     scope_parts = []
@@ -396,6 +413,7 @@ async def get_apps_for_scope(
                 targetRevision=effective_branch,
                 helm=helm_data,
             ),
+            sync_policy=app_sync_policies.get(app_name),
             defined_at=defined_at,
             inherited_from=inherited_from,
             branch_info=branch_info,
@@ -926,6 +944,29 @@ async def remove_app(
         new_content = yaml.dump(data, default_flow_style=False, sort_keys=False)
 
     message = f"[{username}] remove app {app_name} from {file_path}"
+    return await update_file(
+        s.github_spec_repo, file_path, s.github_spec_branch, new_content, message,
+    )
+
+
+async def update_app_sync_policy(
+    file_path: str,
+    app_name: str,
+    sync_policy: dict,
+    username: str = "unknown",
+) -> dict:
+    s = get_settings()
+    content = await get_file_content(s.github_spec_repo, file_path, s.github_spec_branch)
+    data = parse_yaml(content)
+
+    app_data, _ = _find_app_in_raw(data, app_name)
+    if not app_data:
+        raise ValueError(f"App '{app_name}' not found in {file_path}")
+
+    app_data["syncPolicy"] = sync_policy
+
+    new_content = yaml.dump(data, default_flow_style=False, sort_keys=False)
+    message = f"[{username}] update syncPolicy for {app_name} in {file_path}"
     return await update_file(
         s.github_spec_repo, file_path, s.github_spec_branch, new_content, message,
     )
