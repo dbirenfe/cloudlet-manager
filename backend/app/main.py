@@ -222,6 +222,7 @@ async def preview_diff_endpoint(
             req.file_path, req.app_name,
             branch_action=req.branch_action, branch_value=req.branch_value,
             values_action=req.values_action, values_value=req.values_value,
+            sync_policy=req.sync_policy,
         )
         return DiffPreviewResponse(before=before, after=after)
     except ValueError as e:

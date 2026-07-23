@@ -309,6 +309,7 @@ export async function previewDiff(
     branchValue?: string;
     valuesAction?: "set" | "inherit";
     valuesValue?: string;
+    syncPolicy?: Record<string, unknown> | null;
   }
 ): Promise<DiffPreviewResponse> {
   return request<DiffPreviewResponse>("/api/preview-diff", {
@@ -320,6 +321,7 @@ export async function previewDiff(
       branch_value: opts.branchValue ?? null,
       values_action: opts.valuesAction ?? null,
       values_value: opts.valuesValue ?? null,
+      sync_policy: opts.syncPolicy !== undefined ? opts.syncPolicy : null,
     }),
   });
 }

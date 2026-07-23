@@ -159,6 +159,7 @@ class DiffPreviewRequest(BaseModel):
     branch_value: str | None = None
     values_action: str | None = None
     values_value: str | None = None
+    sync_policy: dict | None = None
 
 
 class DiffPreviewResponse(BaseModel):

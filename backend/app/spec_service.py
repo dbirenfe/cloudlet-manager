@@ -761,6 +761,7 @@ async def preview_diff(
     branch_value: str | None = None,
     values_action: str | None = None,
     values_value: str | None = None,
+    sync_policy: dict | None = None,
 ) -> tuple[str, str]:
     """
     Preview the file as it would look after applying changes.
@@ -813,6 +814,14 @@ async def preview_diff(
             src["helm"][key] = values_list
         else:
             data[app_name] = {"source": {"helm": {"valueFiles": values_list}}}
+
+    if sync_policy is not None:
+        target, _ = _find_app_in_raw(data, app_name) if app_data is None else (app_data, None)
+        if target:
+            if sync_policy:
+                target["syncPolicy"] = sync_policy
+            else:
+                target.pop("syncPolicy", None)
 
     if not data:
         after = "# No overrides - inherits from parent scope\n"

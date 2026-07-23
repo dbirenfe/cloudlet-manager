@@ -691,6 +691,17 @@ export default function AppCard({ app, scopeFile, onUpdated }: AppCardProps) {
         }
       }
 
+      if (isSyncChanged) {
+        const policy: Record<string, unknown> = {};
+        if (syncAutomated) {
+          policy.automated = { prune: syncPrune, selfHeal: syncSelfHeal };
+        }
+        if (syncOptions.length > 0) {
+          policy.syncOptions = syncOptions;
+        }
+        opts.syncPolicy = Object.keys(policy).length > 0 ? policy : null;
+      }
+
       const data = await previewDiff(scopeFile, app.name, opts);
       setDiffBefore(data.before);
       setDiffAfter(data.after);
